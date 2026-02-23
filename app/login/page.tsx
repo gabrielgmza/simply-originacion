@@ -19,12 +19,15 @@ export default function LoginPage() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('Usuario logueado:', userCredential.user);
+      
+      // NUEVO: Guardamos una Cookie segura para que el Middleware la lea
+      // Expira en 30 días (2592000 segundos)
+      document.cookie = `firebase-auth-token=${userCredential.user.uid}; path=/; max-age=2592000; secure`;
+      
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Error al iniciar sesión:', err);
       setError('Credenciales incorrectas o usuario no encontrado.');
-    } finally {
       setLoading(false);
     }
   };
@@ -41,44 +44,16 @@ export default function LoginPage() {
           <div className="rounded-md shadow-sm space-y-4">
             <div>
               <label htmlFor="email-address" className="text-sm font-medium text-gray-700">Correo Electrónico</label>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black"
-                placeholder="usuario@financiera.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <input id="email-address" type="email" required className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black" placeholder="usuario@financiera.com" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div>
               <label htmlFor="password" className="text-sm font-medium text-gray-700">Contraseña</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <input id="password" type="password" required className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </div>
-
-          {error && (
-            <div className="text-red-600 text-sm text-center font-medium bg-red-50 p-3 rounded-md border border-red-200">
-              {error}
-            </div>
-          )}
-
+          {error && <div className="text-red-600 text-sm text-center font-medium bg-red-50 p-3 rounded-md border border-red-200">{error}</div>}
           <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
-            >
+            <button type="submit" disabled={loading} className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 transition-colors">
               {loading ? 'Ingresando...' : 'Iniciar Sesión'}
             </button>
           </div>
