@@ -4,24 +4,62 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // NUEVO: Estado para almacenar las estadísticas reales
+  const [stats, setStats] = useState({ entidades: 0, usuarios: 0, volumen: 0 });
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        setLoading(false);
+        // Cuando el usuario entra, buscamos los datos en la base de datos
+        fetchStats();
       } else {
         router.push('/login');
       }
     });
     return () => unsubscribe();
   }, [router]);
+
+  const fetchStats = async () => {
+    try {
+      // 1. Contar Entidades creadas
+      const entSnap = await getDocs(collection(db, 'entities'));
+      
+      // 2. Contar Usuarios creados
+      const usrSnap = await getDocs(collection(db, 'users'));
+      
+      // 3. Calcular Volumen (Suma de montos de operaciones que NO estén rechazadas)
+      const opSnap = await getDocs(collection(db, 'operaciones'));
+      let volumenTotal = 0;
+      
+      opSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.estado !== 'RECHAZADA' && data.montoSolicitado) {
+          volumenTotal += data.montoSolicitado;
+        }
+      });
+
+      // Guardamos en el estado para mostrarlo en pantalla
+      setStats({
+        entidades: entSnap.size,
+        usuarios: usrSnap.size,
+        volumen: volumenTotal
+      });
+      
+    } catch (error) {
+      console.error("Error al cargar estadísticas:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -77,7 +115,7 @@ export default function DashboardPage() {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Entidades (Financieras)</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">0</div>
+                      <div className="text-2xl font-semibold text-gray-900">{stats.entidades}</div>
                     </dd>
                   </dl>
                 </div>
@@ -102,7 +140,7 @@ export default function DashboardPage() {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Usuarios del Sistema</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">1</div>
+                      <div className="text-2xl font-semibold text-gray-900">{stats.usuarios}</div>
                     </dd>
                   </dl>
                 </div>
@@ -125,9 +163,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="ml-5 w-0 flex-1">
                   <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Volumen Originado (Mes)</dt>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Volumen Originado</dt>
                     <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">$0.00</div>
+                      <div className="text-2xl font-semibold text-gray-900">${stats.volumen.toLocaleString()}</div>
                     </dd>
                   </dl>
                 </div>
@@ -139,7 +177,6 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-        
           {/* Tarjeta 4: Nueva Originacion */}
           <div className="bg-gradient-to-br from-blue-600 to-indigo-800 overflow-hidden shadow-lg rounded-lg border border-blue-500 flex flex-col transform transition-transform hover:scale-105">
             <div className="p-5 flex-1">
@@ -164,7 +201,8 @@ export default function DashboardPage() {
               <span className="text-white opacity-70 group-hover:opacity-100">&rarr;</span>
             </Link>
           </div>
-</div>
+
+        </div>
 
         <div className="mt-8 bg-white shadow rounded-lg border border-gray-100">
           <div className="px-4 py-5 sm:p-6">
