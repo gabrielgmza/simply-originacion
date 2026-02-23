@@ -62,7 +62,7 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           
           {/* Tarjeta 1: Entidades */}
           <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100 flex flex-col">
@@ -139,7 +139,32 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-        </div>
+        
+          {/* Tarjeta 4: Nueva Originacion */}
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-800 overflow-hidden shadow-lg rounded-lg border border-blue-500 flex flex-col transform transition-transform hover:scale-105">
+            <div className="p-5 flex-1">
+              <div className="flex items-center">
+                <div className="flex-shrink-0 bg-white/20 rounded-md p-3 backdrop-blur-sm">
+                  <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-blue-100 truncate">Originación</dt>
+                    <dd className="flex items-baseline">
+                      <div className="text-xl font-bold text-white">Nueva Operación</div>
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+            <Link href="/dashboard/originacion" className="bg-black/20 px-5 py-3 border-t border-white/10 hover:bg-black/30 transition-colors flex items-center justify-between group">
+              <span className="text-sm text-white font-medium">Iniciar simulador</span>
+              <span className="text-white opacity-70 group-hover:opacity-100">&rarr;</span>
+            </Link>
+          </div>
+</div>
 
         <div className="mt-8 bg-white shadow rounded-lg border border-gray-100">
           <div className="px-4 py-5 sm:p-6">
