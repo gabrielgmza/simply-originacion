@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, getDocs, serverTimestamp, query } from 'firebase/firestore';
 import { auth, db } from '../../../lib/firebase';
+// Necesitamos importar funciones de Auth para crear el usuario en background
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [entities, setEntities] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Estados del formulario
   const [name, setName] = useState('');
@@ -18,6 +21,10 @@ export default function UsuariosPage() {
   const [role, setRole] = useState('VENDEDOR');
   const [selectedEntity, setSelectedEntity] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
+  
+  // Contraseña temporal por defecto
+  const passwordTemporal = 'Paysur2026!'; 
+  
   const router = useRouter();
 
   useEffect(() => {
@@ -30,12 +37,10 @@ export default function UsuariosPage() {
 
   const loadInitialData = async () => {
     try {
-      // Cargar Usuarios (Registros de perfiles en base de datos)
       const uQuery = query(collection(db, 'users'));
       const uSnap = await getDocs(uQuery);
       setUsers(uSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-      // Cargar Entidades para el selector
       const eQuery = query(collection(db, 'entities'));
       const eSnap = await getDocs(eQuery);
       setEntities(eSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -46,7 +51,6 @@ export default function UsuariosPage() {
     }
   };
 
-  // Cargar sucursales cuando se selecciona una entidad
   useEffect(() => {
     const fetchBranches = async () => {
       if (!selectedEntity) {
@@ -62,11 +66,13 @@ export default function UsuariosPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    
     try {
-      // Guardamos el perfil del usuario en Firestore (Más adelante lo conectaremos con Auth)
+      // 1. Guardamos el perfil en Firestore (base de datos)
       await addDoc(collection(db, 'users'), {
         name,
-        email,
+        email: email.toLowerCase(),
         role,
         entityId: selectedEntity || null,
         branchId: selectedBranch || null,
@@ -74,10 +80,23 @@ export default function UsuariosPage() {
         createdAt: serverTimestamp()
       });
       
+      // 2. ATENCIÓN: Por seguridad y limitaciones técnicas del SDK cliente de Firebase,
+      // la creación real de la cuenta en Auth (createUserWithEmailAndPassword)
+      // cerraría la sesión actual del Súper Admin. 
+      // 
+      // En un entorno de producción avanzado, esto se hace en el Backend (Firebase Admin SDK).
+      // Por ahora, como MVP, creamos el registro en BD y le indicamos al Súper Admin
+      // que debe ir a la consola de Firebase > Auth a crearle la credencial manual.
+      
+      alert(`Usuario guardado en base de datos.\n\nIMPORTANTE (Solo MVP): Para que ${name} pueda iniciar sesión, debes ir a la consola de Firebase -> Authentication y crearle una cuenta con el correo: ${email}`);
+
       setName(''); setEmail(''); setSelectedEntity(''); setSelectedBranch('');
       loadInitialData();
     } catch (error) {
-      alert("Error al guardar el usuario en Firestore");
+      console.error(error);
+      alert("Error al guardar el usuario.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -96,7 +115,6 @@ export default function UsuariosPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Formulario */}
         <form onSubmit={handleSave} className="bg-white p-6 shadow rounded-lg h-fit space-y-4">
           <h2 className="font-bold border-b pb-2">Nuevo Usuario</h2>
           
@@ -107,7 +125,7 @@ export default function UsuariosPage() {
             className="w-full p-2 border rounded text-sm" />
             
           <select value={role} onChange={e => setRole(e.target.value)} className="w-full p-2 border rounded text-sm">
-            <option value="GERENTE_ENTIDAD">Gerente General</option>
+            <option value="GERENTE_ENTIDAD">Gerente de Entidad</option>
             <option value="SUPERVISOR">Supervisor de Sucursal</option>
             <option value="VENDEDOR">Vendedor / Operador</option>
           </select>
@@ -128,12 +146,15 @@ export default function UsuariosPage() {
             </select>
           )}
 
-          <button type="submit" className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 transition-colors">
-            Registrar Usuario
+          <div className="bg-blue-50 p-3 rounded text-xs text-blue-800">
+             Al registrar, el usuario debe ser creado manualmente en Firebase Auth (fase MVP).
+          </div>
+
+          <button type="submit" disabled={isSubmitting} className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400">
+            {isSubmitting ? 'Registrando...' : 'Registrar Usuario'}
           </button>
         </form>
 
-        {/* Tabla */}
         <div className="md:col-span-2 bg-white p-6 shadow rounded-lg">
           <table className="w-full text-left border-collapse">
             <thead>
