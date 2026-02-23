@@ -23,6 +23,11 @@ export default function EntidadDetallePage({ params }: { params: Promise<{ id: s
   const [editName, setEditName] = useState('');
   const [editCuit, setEditCuit] = useState('');
 
+  // NUEVO: Estados para configuración financiera
+  const [tna, setTna] = useState('120'); // Tasa Nominal Anual %
+  const [gastosAdmin, setGastosAdmin] = useState('5000'); // Fijo o %
+  const [seguroVida, setSeguroVida] = useState('0.15'); // % mensual sobre saldo
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) return router.push('/login');
@@ -41,6 +46,12 @@ export default function EntidadDetallePage({ params }: { params: Promise<{ id: s
         setEntity({ id: docSnap.id, ...data });
         setEditName(data.name || '');
         setEditCuit(data.cuit || '');
+        // Cargar parámetros si existen
+        if (data.parametros) {
+            setTna(data.parametros.tna?.toString() || '120');
+            setGastosAdmin(data.parametros.gastosAdmin?.toString() || '5000');
+            setSeguroVida(data.parametros.seguroVida?.toString() || '0.15');
+        }
       } else {
         router.push('/dashboard/entidades');
       }
@@ -61,8 +72,17 @@ export default function EntidadDetallePage({ params }: { params: Promise<{ id: s
     e.preventDefault();
     try {
       const docRef = doc(db, 'entities', id);
-      await updateDoc(docRef, { name: editName, cuit: editCuit });
-      alert('Entidad actualizada correctamente');
+      await updateDoc(docRef, { 
+          name: editName, 
+          cuit: editCuit,
+          // Guardamos los parámetros financieros
+          parametros: {
+              tna: parseFloat(tna),
+              gastosAdmin: parseFloat(gastosAdmin),
+              seguroVida: parseFloat(seguroVida)
+          }
+      });
+      alert('Entidad y parámetros actualizados correctamente');
       loadData();
     } catch (error) {
       console.error("Error actualizando:", error);
@@ -95,7 +115,7 @@ export default function EntidadDetallePage({ params }: { params: Promise<{ id: s
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold">{entity.name}</h1>
-          <p className="text-sm text-gray-500">Gestión de detalles y sucursales</p>
+          <p className="text-sm text-gray-500">Gestión de detalles, parámetros y sucursales</p>
         </div>
         <button onClick={() => router.push('/dashboard/entidades')} className="text-blue-600 hover:underline">
           &larr; Volver a Entidades
@@ -103,10 +123,10 @@ export default function EntidadDetallePage({ params }: { params: Promise<{ id: s
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Bloque: Editar Entidad */}
-        <div className="bg-white p-6 shadow rounded-lg h-fit">
-          <h2 className="font-bold text-lg mb-4 border-b pb-2">Datos de la Entidad</h2>
+        {/* Bloque: Editar Entidad y Parámetros */}
+        <div className="bg-white p-6 shadow rounded-lg h-fit space-y-6">
           <form onSubmit={handleUpdateEntity}>
+            <h2 className="font-bold text-lg mb-4 border-b pb-2">Datos Comerciales</h2>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombre / Razón Social</label>
               <input required value={editName} onChange={e => setEditName(e.target.value)}
@@ -117,8 +137,28 @@ export default function EntidadDetallePage({ params }: { params: Promise<{ id: s
               <input required value={editCuit} onChange={e => setEditCuit(e.target.value)}
                 className="w-full p-2 border rounded" />
             </div>
-            <button type="submit" className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 transition-colors">
-              Actualizar Datos
+
+            <h2 className="font-bold text-lg mt-6 mb-4 border-b pb-2">Parámetros Financieros</h2>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">TNA (%)</label>
+                  <input type="number" step="0.01" required value={tna} onChange={e => setTna(e.target.value)}
+                    className="w-full p-2 border rounded bg-blue-50 focus:bg-white" placeholder="Ej. 120" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Seguro de Vida (%)</label>
+                  <input type="number" step="0.01" required value={seguroVida} onChange={e => setSeguroVida(e.target.value)}
+                    className="w-full p-2 border rounded bg-blue-50 focus:bg-white" placeholder="Ej. 0.15" />
+                </div>
+            </div>
+            <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gastos Administrativos (Monto Fijo $)</label>
+                <input type="number" step="0.01" required value={gastosAdmin} onChange={e => setGastosAdmin(e.target.value)}
+                  className="w-full p-2 border rounded bg-blue-50 focus:bg-white" placeholder="Ej. 5000" />
+            </div>
+
+            <button type="submit" className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+              Guardar Configuración
             </button>
           </form>
         </div>
