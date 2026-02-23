@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 
@@ -11,13 +12,11 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Escuchar si el usuario tiene sesión iniciada
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         setLoading(false);
       } else {
-        // Si no está logueado, lo devolvems al login por seguridad
         router.push('/login');
       }
     });
@@ -33,7 +32,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Pantalla de carga mientras verificamos a Firebase
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -44,7 +42,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Barra de navegación superior */}
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -64,13 +61,12 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      {/* Contenido principal del Dashboard */}
       <main className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
           {/* Tarjeta 1: Entidades */}
-          <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100">
-            <div className="p-5">
+          <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100 flex flex-col">
+            <div className="p-5 flex-1">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-blue-100 rounded-md p-3">
                   <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -87,14 +83,15 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200">
-              <div className="text-sm text-blue-700 hover:text-blue-900 font-medium cursor-pointer">Gestionar entidades &rarr;</div>
-            </div>
+            <Link href="/dashboard/entidades" className="bg-gray-50 px-5 py-3 border-t border-gray-200 hover:bg-gray-100 transition-colors flex items-center justify-between group">
+              <span className="text-sm text-blue-700 font-medium group-hover:text-blue-900">Gestionar entidades</span>
+              <span className="text-blue-500 group-hover:text-blue-700">&rarr;</span>
+            </Link>
           </div>
 
           {/* Tarjeta 2: Usuarios Activos */}
-          <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100">
-            <div className="p-5">
+          <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100 flex flex-col">
+            <div className="p-5 flex-1">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
                   <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -111,14 +108,15 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200">
-              <div className="text-sm text-blue-700 hover:text-blue-900 font-medium cursor-pointer">Ver usuarios &rarr;</div>
-            </div>
+            <Link href="#" className="bg-gray-50 px-5 py-3 border-t border-gray-200 hover:bg-gray-100 transition-colors flex items-center justify-between group">
+              <span className="text-sm text-blue-700 font-medium group-hover:text-blue-900">Ver usuarios (Próximamente)</span>
+              <span className="text-blue-500 group-hover:text-blue-700">&rarr;</span>
+            </Link>
           </div>
 
           {/* Tarjeta 3: Volumen de Créditos */}
-          <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100">
-            <div className="p-5">
+          <div className="bg-white overflow-hidden shadow rounded-lg border border-gray-100 flex flex-col">
+            <div className="p-5 flex-1">
               <div className="flex items-center">
                 <div className="flex-shrink-0 bg-purple-100 rounded-md p-3">
                   <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -135,9 +133,10 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 px-5 py-3 border-t border-gray-200">
-              <div className="text-sm text-blue-700 hover:text-blue-900 font-medium cursor-pointer">Reporte global &rarr;</div>
-            </div>
+            <Link href="#" className="bg-gray-50 px-5 py-3 border-t border-gray-200 hover:bg-gray-100 transition-colors flex items-center justify-between group">
+              <span className="text-sm text-blue-700 font-medium group-hover:text-blue-900">Reporte global (Próximamente)</span>
+              <span className="text-blue-500 group-hover:text-blue-700">&rarr;</span>
+            </Link>
           </div>
 
         </div>
