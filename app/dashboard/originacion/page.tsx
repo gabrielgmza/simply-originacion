@@ -45,21 +45,31 @@ export default function OriginacionPage() {
     }
   };
 
-  const handleConsultarDni = (e: React.FormEvent) => {
+  const handleConsultarDni = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    setTimeout(() => {
-      setCuadData({
-        nombre: 'JUAN PABLO PEREZ',
-        reparticion: 'DGE - DOCENTES TITULARES',
-        sueldoNeto: 850000,
-        margenAfectable: 170000,
-        score: 'Apto'
+    try {
+      // Llamamos a nuestro microservicio Backend
+      const response = await fetch('/api/cuad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni })
       });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setCuadData(result.data);
+        setStep(2);
+      } else {
+        alert(result.error || 'Error al consultar DNI');
+      }
+    } catch (error) {
+      alert('Error de conexión con el servidor.');
+    } finally {
       setLoading(false);
-      setStep(2);
-    }, 1500);
+    }
   };
 
   // NUEVO: Motor de cálculo con parámetros reales de la Entidad
