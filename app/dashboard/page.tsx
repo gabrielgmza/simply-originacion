@@ -133,8 +133,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <Link href="#" className="bg-gray-50 px-5 py-3 border-t border-gray-200 hover:bg-gray-100 transition-colors flex items-center justify-between group">
-              <span className="text-sm text-blue-700 font-medium group-hover:text-blue-900">Reporte global (Próximamente)</span>
+            <Link href="/dashboard/operaciones" className="bg-gray-50 px-5 py-3 border-t border-gray-200 hover:bg-gray-100 transition-colors flex items-center justify-between group">
+              <span className="text-sm text-blue-700 font-medium group-hover:text-blue-900">Ver operaciones activas</span>
               <span className="text-blue-500 group-hover:text-blue-700">&rarr;</span>
             </Link>
           </div>
