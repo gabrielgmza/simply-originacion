@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db } from '../../lib/firebase';
 import { Zap, TrendingUp, Clock, CheckCircle, ArrowRight, Wallet, Activity } from 'lucide-react';
 
 export default function DashboardPage() {

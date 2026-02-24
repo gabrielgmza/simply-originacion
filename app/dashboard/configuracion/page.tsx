@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { auth } from '../../../lib/firebase';
 import { Settings, Shield, User as UserIcon, Bell, Key, Globe } from 'lucide-react';
 
 export default function PerfilPage() {
