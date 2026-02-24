@@ -3,199 +3,170 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, getDocs, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../../lib/firebase';
-import { jsPDF } from 'jspdf';
 
 export default function OperacionesPage() {
   const router = useRouter();
   const [operaciones, setOperaciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return router.push('/login');
-      fetchOperaciones();
+      await loadProfileAndData(user.email);
     });
     return () => unsubscribe();
   }, [router]);
 
-  const fetchOperaciones = async () => {
+  const loadProfileAndData = async (email: string | null) => {
+    if (!email) return;
+
     try {
-      const q = query(collection(db, 'operaciones'), orderBy('fechaCreacion', 'desc'));
-      const snapshot = await getDocs(q);
-      setOperaciones(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      // 1. Buscamos el rol del usuario
+      let role = 'SUPER_ADMIN';
+      let entityId = null;
+
+      const qUser = query(collection(db, 'users'), where('email', '==', email.toLowerCase()));
+      const snapUser = await getDocs(qUser);
+      
+      if (!snapUser.empty) {
+        const userData = snapUser.docs[0].data();
+        role = userData.role;
+        entityId = userData.entityId;
+        setUserProfile(userData);
+      }
+
+      // 2. Traemos las operaciones según el rol
+      let qOps;
+      if (role === 'SUPER_ADMIN') {
+        // Super Admin ve todo
+        qOps = collection(db, 'operaciones');
+      } else if (role === 'GERENTE_ENTIDAD') {
+        // Gerente ve solo las de su entidad
+        qOps = query(collection(db, 'operaciones'), where('entidadId', '==', entityId));
+      } else {
+        // Vendedor ve solo las que él originó
+        qOps = query(collection(db, 'operaciones'), where('vendedorEmail', '==', email));
+      }
+
+      const querySnapshot = await getDocs(qOps);
+      const ops = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Ordenamos por fecha en memoria (las más nuevas primero)
+      ops.sort((a: any, b: any) => {
+          const dateA = a.fechaCreacion?.toMillis() || 0;
+          const dateB = b.fechaCreacion?.toMillis() || 0;
+          return dateB - dateA;
+      });
+
+      setOperaciones(ops);
     } catch (error) {
-      console.error("Error al cargar operaciones:", error);
+      console.error("Error cargando operaciones:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const cambiarEstado = async (id: string, nuevoEstado: string) => {
+  const handleLiquidar = async (operacionId: string) => {
+    if (!confirm('¿Confirmas que se ha transferido el dinero al cliente y la operación está Liquidada?')) return;
+    
     try {
-      await updateDoc(doc(db, 'operaciones', id), { estado: nuevoEstado });
-      fetchOperaciones(); // Recargar para ver el cambio
+      const docRef = doc(db, 'operaciones', operacionId);
+      await updateDoc(docRef, { estado: 'LIQUIDADO' });
+      
+      // Actualizamos el estado local para no tener que recargar todo
+      setOperaciones(ops => ops.map(op => op.id === operacionId ? { ...op, estado: 'LIQUIDADO' } : op));
+      alert('Operación marcada como LIQUIDADA con éxito.');
     } catch (error) {
-      alert("Error al actualizar el estado");
+      console.error("Error actualizando estado:", error);
+      alert('Error al liquidar la operación');
     }
-  };
-
-  // NUEVO: Motor generador de PDFs (Contratos)
-  const generarPDF = (op: any) => {
-    const doc = new jsPDF();
-    
-    // --- CABECERA ---
-    doc.setFillColor(37, 99, 235); // Azul corporativo
-    doc.rect(0, 0, 210, 30, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.text("PaySur", 20, 20);
-    
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("DOCUMENTO VINCULANTE - CÓDIGO DE DESCUENTO", 190, 20, { align: "right" });
-    
-    // --- CUERPO LEGAL ---
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("PAGARÉ SIN PROTESTO Y AUTORIZACIÓN DE DESCUENTO", 105, 50, { align: "center" });
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    
-    const fecha = op.fechaFirma ? new Date(op.fechaFirma).toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR');
-    
-    doc.text(`Fecha de emisión: ${fecha}`, 20, 70);
-    doc.text(`Lugar: Mendoza, Argentina`, 20, 77);
-    doc.text(`Monto del crédito: $${op.montoSolicitado?.toLocaleString()}`, 20, 84);
-    
-    const textoLegal = `Por el presente PAGARÉ, yo ${op.clienteNombre}, titular del DNI Nº ${op.clienteDni}, me comprometo incondicionalmente a pagar a la orden de PaySur o a quien represente sus derechos, la cantidad de PESOS ${op.montoSolicitado?.toLocaleString()}, que serán abonados en ${op.plazoCuotas} cuotas mensuales, iguales y consecutivas de PESOS ${(op.valorCuota || 0).toLocaleString(undefined, {maximumFractionDigits:0})}.`;
-    
-    const splitTexto = doc.splitTextToSize(textoLegal, 170);
-    doc.text(splitTexto, 20, 100);
-    
-    const textoAutorizacion = `Asimismo, en mi carácter de empleado/a de ${op.reparticion}, AUTORIZO expresamente a mi empleador a retener de mis haberes mensuales (mediante Código de Descuento) el importe correspondiente a las cuotas aquí acordadas, para ser transferidas a PaySur hasta la cancelación total de la deuda contraída.`;
-    
-    const splitAutorizacion = doc.splitTextToSize(textoAutorizacion, 170);
-    doc.text(splitAutorizacion, 20, 130);
-    
-    // --- BLOQUE DE FIRMA DIGITAL ---
-    doc.setDrawColor(200, 200, 200);
-    doc.setFillColor(249, 250, 251);
-    doc.rect(20, 160, 170, 45, 'FD');
-    
-    doc.setFont("helvetica", "bold");
-    doc.text("FIRMA DIGITAL Y ACEPTACIÓN DE TÉRMINOS", 25, 170);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`El cliente ha aceptado los términos y condiciones de forma electrónica.`, 25, 180);
-    doc.text(`Fecha y hora de firma: ${op.fechaFirma ? new Date(op.fechaFirma).toLocaleString('es-AR') : 'Pendiente'}`, 25, 187);
-    doc.text(`ID de Operación / Hash: ${op.id}`, 25, 194);
-    
-    if (op.estado === 'APROBADA' || op.estado === 'LIQUIDADA') {
-      doc.setTextColor(22, 163, 74); // Verde
-      doc.text(`Estado de validación: FIRMA VERIFICADA Y APROBADA`, 25, 201);
-    } else {
-      doc.setTextColor(220, 38, 38); // Rojo
-      doc.text(`Estado de validación: PENDIENTE DE FIRMA`, 25, 201);
-    }
-    
-    // --- PIE DE PÁGINA ---
-    doc.setTextColor(150, 150, 150);
-    doc.setFontSize(8);
-    doc.text("Documento generado automáticamente por Simply Originación ©", 105, 280, { align: "center" });
-    
-    // Descargar el archivo
-    doc.save(`Contrato_PaySur_${op.clienteDni}.pdf`);
   };
 
   const getStatusBadge = (estado: string) => {
     switch (estado) {
-      case 'PENDIENTE_FIRMA':
-        return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200">Pendiente Firma</span>;
-      case 'APROBADA':
-        return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold border border-green-200">Aprobada (Firma OK)</span>;
-      case 'LIQUIDADA':
-        return <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold border border-blue-200">Liquidada / Pagada</span>;
-      case 'RECHAZADA':
-        return <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold border border-red-200">Rechazada</span>;
-      default:
-        return <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold border border-gray-200">{estado}</span>;
+      case 'PENDIENTE_FIRMA': return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">Pendiente Firma</span>;
+      case 'LISTO_PARA_LIQUIDAR': return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold animate-pulse">Listo para Liquidar</span>;
+      case 'LIQUIDADO': return <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold">Liquidado</span>;
+      case 'RECHAZADA': return <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold">Rechazada</span>;
+      default: return <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold">{estado}</span>;
     }
   };
 
-  if (loading) return <div className="p-10 text-center text-black">Cargando operaciones...</div>;
+  if (loading) return <div className="p-10 text-center">Cargando operaciones...</div>;
 
   return (
     <div className="p-8 max-w-7xl mx-auto text-black bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pipeline de Operaciones</h1>
-          <p className="text-sm text-gray-500">Seguimiento de créditos y documentación</p>
+          <h1 className="text-2xl font-bold text-gray-900">Bandeja de Operaciones</h1>
+          <p className="text-sm text-gray-500">Gestión de créditos y liquidaciones</p>
         </div>
         <button onClick={() => router.push('/dashboard')} className="text-blue-600 hover:underline">
           &larr; Volver al Panel
         </button>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
+      <div className="bg-white shadow-lg rounded-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto / Cuotas</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado Actual</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones y Documentos</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Fecha</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Cliente</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Monto Solicitado</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Cuotas</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Estado</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-100">
               {operaciones.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-gray-500">No hay operaciones registradas. ¡Inicia una nueva simulación!</td>
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
+                    No hay operaciones registradas aún.
+                  </td>
                 </tr>
               ) : (
                 operaciones.map((op) => (
-                  <tr key={op.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {op.fechaCreacion?.toDate().toLocaleDateString('es-AR') || 'Reciente'}
+                  <tr key={op.id} className="hover:bg-blue-50/50 transition-colors">
+                    <td className="p-4 whitespace-nowrap text-sm text-gray-500">
+                      {op.fechaCreacion ? new Date(op.fechaCreacion.toMillis()).toLocaleDateString('es-AR') : 'Reciente'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-gray-900">{op.clienteNombre}</div>
-                      <div className="text-xs text-gray-500">DNI: {op.clienteDni}</div>
+                    <td className="p-4">
+                      <div className="font-bold text-gray-900 text-sm">{op.clienteNombre}</div>
+                      <div className="text-xs text-gray-500">DNI: {op.clienteDni} | {op.entidadNombre}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-green-600">${op.montoSolicitado?.toLocaleString()}</div>
-                      <div className="text-xs text-gray-500">{op.plazoCuotas}x ${(op.valorCuota || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <td className="p-4 whitespace-nowrap">
+                      <div className="text-sm font-bold text-gray-900">${op.montoSolicitado?.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">Cuota: ${op.valorCuota?.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="p-4 whitespace-nowrap text-sm text-gray-700 font-medium">
+                      {op.plazoCuotas}
+                    </td>
+                    <td className="p-4 whitespace-nowrap">
                       {getStatusBadge(op.estado)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap flex flex-col items-end space-y-2">
-                      <select 
-                        className="border border-gray-300 rounded text-xs p-1 bg-white outline-none focus:border-blue-500 cursor-pointer"
-                        value={op.estado}
-                        onChange={(e) => cambiarEstado(op.id, e.target.value)}
-                      >
-                        <option value="PENDIENTE_FIRMA">Pendiente Firma</option>
-                        <option value="APROBADA">Marcar Aprobada</option>
-                        <option value="LIQUIDADA">Marcar Liquidada</option>
-                        <option value="RECHAZADA">Rechazar</option>
-                      </select>
-                      
-                      {/* Botón Mágico de Descarga PDF */}
-                      {(op.estado === 'APROBADA' || op.estado === 'LIQUIDADA') && (
+                    <td className="p-4 whitespace-nowrap text-center">
+                      {/* Botón de Liquidar: Solo visible si está firmada */}
+                      {op.estado === 'LISTO_PARA_LIQUIDAR' && (
                         <button 
-                          onClick={() => generarPDF(op)}
-                          className="flex items-center text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1 rounded transition-colors"
+                          onClick={() => handleLiquidar(op.id)}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"
                         >
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                          Descargar Contrato
+                          Liquidar Crédito
                         </button>
+                      )}
+                      {op.estado === 'PENDIENTE_FIRMA' && (
+                        <span className="text-xs text-gray-400 italic">Esperando firma...</span>
+                      )}
+                      {op.estado === 'LIQUIDADO' && (
+                        <span className="text-xs text-green-600 font-bold flex items-center justify-center">
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                          Finalizado
+                        </span>
                       )}
                     </td>
                   </tr>
