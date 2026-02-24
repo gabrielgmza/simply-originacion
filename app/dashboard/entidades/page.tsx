@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../../src/lib/firebase';
+import { db } from '@/lib/firebase';
 
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
   useEffect(() => {
@@ -39,7 +39,8 @@ export default function EntidadesPage() {
     try {
       const snap = await getDocs(collection(db, 'entities'));
       setEntities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } finally { setLoading(false); }
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   const handleEdit = (ent: any) => {
@@ -51,7 +52,6 @@ export default function EntidadesPage() {
     setFinancialData({ ...ent.parametros });
     setCurrentId(ent.id);
     setIsEditing(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,61 +73,39 @@ export default function EntidadesPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-16 pb-24 p-6 bg-slate-50 min-h-screen text-slate-900 font-bold">
+    <div className="max-w-7xl mx-auto space-y-16 pb-24 p-6 bg-slate-50 min-h-screen text-slate-900">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <h1 className="text-6xl font-black uppercase italic tracking-tighter">Consola Core SaaS</h1>
 
-      <div className="bg-white p-14 rounded-[4rem] shadow-2xl border-4 border-slate-300">
+      <div className="bg-white p-14 rounded-[4rem] shadow-2xl border-4 border-slate-400">
         <form onSubmit={handleSubmit} className="space-y-16">
            <div className="space-y-10">
               <h3 className="text-[12px] font-black text-blue-700 uppercase tracking-[0.5em] border-b-8 border-blue-100 pb-6 flex justify-between">
                 <span>1. Datos de Registro (SaaS Owner)</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                <div className="md:col-span-2 space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">Razón Social</label>
-                  <input required value={platformData.name} onChange={e => setPlatformData({...platformData, name: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2rem] font-black text-2xl outline-none focus:border-blue-700" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">CUIT</label>
-                  <input value={platformData.cuit} onChange={e => setPlatformData({...platformData, cuit: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2rem] font-black text-2xl outline-none" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">Email Soporte</label>
-                  <input type="email" value={platformData.email} onChange={e => setPlatformData({...platformData, email: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2rem] font-black text-2xl outline-none" />
-                </div>
-                <div className="bg-indigo-700 p-8 rounded-[3rem] flex flex-col justify-center shadow-2xl text-white">
-                  <label className="text-[10px] font-black uppercase italic mb-2">Comisión Simply (%)</label>
-                  <input type="number" step="0.1" value={platformData.comisionSaaS} onChange={e => setPlatformData({...platformData, comisionSaaS: parseFloat(e.target.value)})} className="bg-transparent text-white font-black text-6xl outline-none" />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-slate-950">
+                <div className="md:col-span-2 space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest">Razón Social</label><input required value={platformData.name} onChange={e => setPlatformData({...platformData, name: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2rem] font-black text-2xl outline-none" /></div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest">CUIT</label><input value={platformData.cuit} onChange={e => setPlatformData({...platformData, cuit: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2rem] font-black text-2xl outline-none" /></div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest">Nombre Fantasía</label><input value={platformData.fantasyName} onChange={e => setPlatformData({...platformData, fantasyName: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2rem] font-black text-2xl outline-none" /></div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest">Dirección</label><input value={platformData.address} onChange={e => setPlatformData({...platformData, address: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2rem] font-black text-2xl outline-none" /></div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest">Teléfono</label><input value={platformData.phone} onChange={e => setPlatformData({...platformData, phone: e.target.value})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2rem] font-black text-2xl outline-none" /></div>
+                <div className="bg-indigo-800 p-8 rounded-[3rem] flex flex-col justify-center text-white"><label className="text-[10px] font-black uppercase italic mb-2">Comisión Simply (%)</label><input type="number" step="0.1" value={platformData.comisionSaaS} onChange={e => setPlatformData({...platformData, comisionSaaS: parseFloat(e.target.value)})} className="bg-transparent text-white font-black text-6xl outline-none border-none" /></div>
               </div>
            </div>
 
            <div className="space-y-10">
-              <h3 className="text-[12px] font-black text-emerald-700 uppercase tracking-[0.5em] border-b-8 border-emerald-100 pb-6">
-                2. Configuración Core (Editable por Entidad)
-              </h3>
+              <h3 className="text-[12px] font-black text-emerald-700 uppercase tracking-[0.5em] border-b-8 border-emerald-100 pb-6">2. Parametría Bancaria (Entidad)</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">Amortización</label>
-                  <select value={financialData.sistemaAmortizacion} onChange={e => setFinancialData({...financialData, sistemaAmortizacion: e.target.value})} className="w-full p-6 bg-emerald-50 border-4 border-emerald-400 rounded-[2rem] font-black text-emerald-950 outline-none text-xl">
-                    <option value="FRANCES">SISTEMA FRANCÉS</option>
-                    <option value="ALEMAN">SISTEMA ALEMÁN</option>
-                    <option value="MIXTO">SISTEMA MIXTO</option>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest text-slate-600">Amortización</label>
+                  <select value={financialData.sistemaAmortizacion} onChange={e => setFinancialData({...financialData, sistemaAmortizacion: e.target.value})} className="w-full p-6 bg-emerald-50 border-4 border-emerald-800 rounded-[2rem] font-black text-emerald-950 text-xl outline-none cursor-pointer">
+                    <option value="FRANCES">FRANCÉS</option>
+                    <option value="ALEMAN">ALEMÁN</option>
+                    <option value="MIXTO">MIXTO</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">TNA (%)</label>
-                  <input type="number" value={financialData.tna} onChange={e => setFinancialData({...financialData, tna: parseFloat(e.target.value)})} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2.5rem] font-black text-blue-700 text-4xl" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">Mora (%)</label>
-                  <input type="number" value={financialData.moratorios} onChange={e => setFinancialData({...financialData, moratorios: parseFloat(e.target.value)})} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2.5rem] font-black text-4xl" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[12px] font-black text-slate-600 uppercase">Otorgamiento %</label>
-                  <input type="number" value={financialData.gastosOtorgamientoPct} onChange={e => setFinancialData({...financialData, gastosOtorgamientoPct: parseFloat(e.target.value)})} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2.5rem] font-black text-4xl" />
-                </div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest text-slate-600">TNA (%)</label><input type="number" value={financialData.tna} onChange={e => setFinancialData({...financialData, tna: parseFloat(e.target.value)})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2.5rem] font-black text-blue-700 text-4xl outline-none" /></div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest text-slate-600">Punitorios (%)</label><input type="number" value={financialData.punitorios} onChange={e => setFinancialData({...financialData, punitorios: parseFloat(e.target.value)})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2.5rem] font-black text-4xl outline-none" /></div>
+                <div className="space-y-2"><label className="text-[12px] font-black uppercase ml-8 tracking-widest text-slate-600">Otorgamiento %</label><input type="number" value={financialData.gastosOtorgamientoPct} onChange={e => setFinancialData({...financialData, gastosOtorgamientoPct: parseFloat(e.target.value)})} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2.5rem] font-black text-4xl outline-none" /></div>
               </div>
            </div>
 
@@ -137,24 +115,6 @@ export default function EntidadesPage() {
               </button>
            </div>
         </form>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mt-12">
-        {entities.map(ent => (
-          <div key={ent.id} className="bg-white p-10 rounded-[3rem] border-4 border-slate-200 shadow-xl relative overflow-hidden">
-             <div className="flex justify-between items-start">
-                <h4 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter">{ent.fantasyName || ent.name}</h4>
-                <button onClick={() => handleEdit(ent)} className="bg-slate-100 p-4 rounded-2xl text-slate-900 hover:bg-blue-600 hover:text-white transition-all">
-                   EDITAR CORE
-                </button>
-             </div>
-             <div className="mt-8 grid grid-cols-2 gap-4 border-t-4 border-slate-50 pt-8 text-[10px] uppercase font-black">
-                <div className="flex justify-between border-b pb-1"><span>TNA</span><span className="text-blue-600">{ent.parametros?.tna}%</span></div>
-                <div className="flex justify-between border-b pb-1"><span>SISTEMA</span><span className="text-slate-900">{ent.parametros?.sistemaAmortizacion}</span></div>
-                <div className="flex justify-between border-b pb-1"><span>COMISIÓN</span><span className="text-emerald-600">{ent.comisionSaaS}%</span></div>
-             </div>
-          </div>
-        ))}
       </div>
     </div>
   );

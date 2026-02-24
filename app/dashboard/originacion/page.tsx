@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../../../src/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
   useEffect(() => {
@@ -52,8 +52,8 @@ export default function OriginacionPage() {
   };
 
   const calcularFinanzas = () => {
-    const principal = parseFloat(monto) || 0;
-    if (principal <= 0) return null;
+    const capital = parseFloat(monto) || 0;
+    if (capital <= 0) return null;
     const n = parseInt(cuotas) || 12;
     const ent = entities.find(e => e.id === selectedEntityId);
     const p = ent?.parametros || {};
@@ -61,11 +61,10 @@ export default function OriginacionPage() {
     const tna = (p.tna || 120) / 100;
     const i = tna / 12;
 
-    const gastosAdmin = principal * ((p.gastosAdminPct || 0) / 100);
-    const gastosOtorg = principal * ((p.gastosOtorgamientoPct || 0) / 100);
-    const capFin = principal + gastosAdmin;
-    const seguro = principal * ((p.seguroVida || 0) / 100);
-    const fee = (p.feeFijo || 0);
+    const gastosAdmin = capital * ((p.gastosAdminPct || 0) / 100);
+    const gastosOtorg = capital * ((p.gastosOtorgamientoPct || 0) / 100);
+    const capFin = capital + gastosAdmin;
+    const seguro = capital * ((p.seguroVida || 0) / 100);
 
     let cuotaBase = 0;
     if (sistema === 'ALEMAN') {
@@ -78,8 +77,8 @@ export default function OriginacionPage() {
       cuotaBase = (capFin * i) / (1 - Math.pow(1 + i, -n));
     }
 
-    const cuotaFinal = cuotaBase + seguro + (fee / n);
-    const montoNeto = principal - gastosOtorg;
+    const cuotaFinal = cuotaBase + seguro + ((p.feeFijo || 0) / n);
+    const montoNeto = capital - gastosOtorg;
     const tea = (Math.pow(1 + i, 12) - 1) * 100;
     const cft = (Math.pow((cuotaFinal * n) / montoNeto, 1 / (n / 12)) - 1) * 100;
 
@@ -110,12 +109,12 @@ export default function OriginacionPage() {
     <div className="max-w-7xl mx-auto space-y-10 p-6 bg-slate-50 min-h-screen">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <h1 className="text-5xl font-black text-slate-950 uppercase italic leading-none tracking-tighter">Simulador Originación</h1>
-      <div className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-slate-300 overflow-hidden min-h-[500px]">
+      <div className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-slate-400 overflow-hidden min-h-[500px]">
         {step === 1 && (
-          <form onSubmit={handleConsultarDni} className="max-w-lg mx-auto py-24 px-8 space-y-12 animate-in fade-in">
+          <form onSubmit={handleConsultarDni} className="max-w-lg mx-auto py-24 px-8 space-y-12">
              <div className="space-y-4">
                 <label className="text-[11px] font-black text-slate-600 uppercase tracking-widest pl-4">Financiera</label>
-                <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)} className="w-full p-6 bg-slate-100 border-4 border-slate-400 rounded-[2.5rem] font-black text-slate-950 outline-none text-xl">
+                <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2.5rem] font-black text-slate-950 text-xl">
                    {entities.map(e => <option key={e.id} value={e.id}>{e.fantasyName || e.name}</option>)}
                 </select>
              </div>
@@ -130,38 +129,37 @@ export default function OriginacionPage() {
         )}
         {step === 2 && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 animate-in slide-in-from-bottom-10 duration-700">
-             <div className="lg:col-span-8 p-14 space-y-12 border-r-4 border-slate-100 font-black">
-                <div className="bg-slate-100 p-10 rounded-[3.5rem] border-4 border-slate-400 shadow-inner">
-                   <h3 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{cuadData?.nombre}</h3>
-                   <p className="text-lg font-bold text-blue-700 mt-2 uppercase tracking-widest opacity-80">DNI {dni} • Margen: ${cuadData?.margenAfectable?.toLocaleString()}</p>
+             <div className="lg:col-span-8 p-14 space-y-12 border-r-4 border-slate-100">
+                <div className="bg-slate-100 p-10 rounded-[3.5rem] border-4 border-slate-800 shadow-inner">
+                   <h3 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter">{cuadData?.nombre}</h3>
+                   <p className="text-lg font-bold text-blue-700 mt-2 uppercase tracking-widest">DNI {dni} • Margen: ${cuadData?.margenAfectable?.toLocaleString()}</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4">
-                   <div className="space-y-4"><label className="text-[12px] font-black text-slate-600 uppercase ml-10">Monto Solicitado</label><input type="number" value={monto} onChange={e => setMonto(e.target.value)} className="w-full p-8 bg-slate-100 border-4 border-slate-400 rounded-[3rem] text-5xl font-black text-slate-950 focus:bg-white outline-none shadow-inner" /></div>
-                   <div className="space-y-4"><label className="text-[12px] font-black text-slate-600 uppercase ml-10">Cuotas</label><select value={cuotas} onChange={e => setCuotas(e.target.value)} className="w-full p-8 bg-slate-100 border-4 border-slate-400 rounded-[3rem] text-5xl font-black text-slate-950 focus:bg-white outline-none cursor-pointer">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4 font-black">
+                   <div className="space-y-4"><label className="text-[12px] uppercase ml-10 text-slate-500">Monto Solicitado</label><input type="number" value={monto} onChange={e => setMonto(e.target.value)} className="w-full p-8 bg-slate-100 border-4 border-slate-800 rounded-[3rem] text-5xl text-slate-950 focus:bg-white outline-none shadow-inner" /></div>
+                   <div className="space-y-4"><label className="text-[12px] uppercase ml-10 text-slate-500">Cuotas</label><select value={cuotas} onChange={e => setCuotas(e.target.value)} className="w-full p-8 bg-slate-100 border-4 border-slate-800 rounded-[3rem] text-5xl text-slate-950 focus:bg-white outline-none cursor-pointer">
                      {entities.find(e => e.id === selectedEntityId)?.parametros?.plazos?.split(',').map((p:any) => (<option key={p} value={p.trim()}>{p.trim()} CUOTAS</option>))}
                    </select></div>
                 </div>
                 <div className="bg-indigo-700 p-10 rounded-[3.5rem] text-white shadow-2xl flex justify-between items-center">
                    <p className="text-3xl font-black uppercase italic tracking-tighter leading-none">Sistema {sim?.sistema}</p>
-                   <span className="bg-white text-indigo-700 px-6 py-2 rounded-full text-xs font-black">CALCULO TIEMPO REAL</span>
                 </div>
              </div>
              <div className="lg:col-span-4 bg-slate-950 p-14 flex flex-col justify-between text-white shadow-[inset_0_4px_30px_rgba(0,0,0,0.5)]">
                 <div className="text-center space-y-16">
                    <div>
                       <p className="text-blue-500 text-[14px] font-black uppercase tracking-[0.6em] mb-12 italic">Cuota Mensual Fija</p>
-                      <h2 className="text-[9rem] font-black text-white italic tracking-tighter drop-shadow-[0_20px_40px_rgba(59,130,246,0.5)] leading-none">
+                      <h2 className="text-[9rem] font-black text-white italic tracking-tighter leading-none drop-shadow-[0_20px_40px_rgba(59,130,246,0.5)]">
                         ${sim?.cuota.toLocaleString(undefined, {maximumFractionDigits:0})}
                       </h2>
                    </div>
-                   <div className="grid grid-cols-2 gap-8 text-center">
+                   <div className="grid grid-cols-2 gap-8 text-center font-black">
                       <div className="bg-white/5 p-8 rounded-[2.5rem] border-2 border-white/10 backdrop-blur-xl">
-                         <p className="text-[11px] text-slate-500 uppercase font-black mb-3 leading-none opacity-60">T.E.Anual</p>
-                         <p className="text-4xl font-black tracking-tighter leading-none">{sim?.tea.toFixed(1)}%</p>
+                         <p className="text-[11px] text-slate-500 uppercase mb-3 leading-none opacity-60">T.E.Anual</p>
+                         <p className="text-4xl tracking-tighter leading-none">{sim?.tea.toFixed(1)}%</p>
                       </div>
                       <div className="bg-white/5 p-8 rounded-[2.5rem] border-2 border-white/10 backdrop-blur-xl">
-                         <p className="text-[11px] text-emerald-500 uppercase font-black mb-3 leading-none opacity-80">C.F.T. Real</p>
-                         <p className="text-4xl font-black text-emerald-400 tracking-tighter leading-none">{sim?.cft.toFixed(1)}%</p>
+                         <p className="text-[11px] text-emerald-500 uppercase mb-3 leading-none opacity-80">C.F.T. Real</p>
+                         <p className="text-4xl text-emerald-400 tracking-tighter leading-none">{sim?.cft.toFixed(1)}%</p>
                       </div>
                    </div>
                 </div>
