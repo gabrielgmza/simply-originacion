@@ -16,6 +16,8 @@ import {
   Moon, 
   Bell, 
   Search,
+  Settings,
+  Menu,
   ChevronRight
 } from 'lucide-react';
 
@@ -55,74 +57,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={isDark ? 'dark' : ''}>
-      <div className="flex h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans selection:bg-indigo-500/30">
+      <div className="flex h-screen bg-[#F4F7FE] dark:bg-[#000000] text-slate-800 dark:text-slate-200 transition-colors duration-300 font-sans selection:bg-orange-500/30 overflow-hidden">
         
-        {/* SIDEBAR SLIM ELITE */}
-        <aside className="w-60 bg-white dark:bg-[#0b1224] border-r border-slate-200/60 dark:border-white/5 flex flex-col z-50">
-          <div className="p-6 flex items-center space-x-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-              <span className="text-sm font-bold italic">S</span>
+        {/* SIDEBAR UENA STYLE */}
+        <aside className="w-72 bg-white dark:bg-[#111111] border-r border-slate-100 dark:border-white/5 flex flex-col z-50 shadow-2xl transition-all duration-500">
+          <div className="p-8 flex items-center space-x-3">
+            <div className="w-10 h-10 bg-[#FF5E14] rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-600/30">
+              <span className="text-xl font-bold italic">U</span>
             </div>
             <div>
-              <h1 className="text-sm font-bold tracking-tight uppercase italic leading-none">Simply</h1>
-              <span className="text-[8px] uppercase tracking-widest font-semibold text-indigo-500/80">Private Core</span>
+              <h1 className="text-xl font-black tracking-tighter text-slate-900 dark:text-white leading-none italic">UENA</h1>
+              <span className="text-[10px] uppercase tracking-widest font-bold text-[#FF5E14] opacity-80">Core Dashboard</span>
             </div>
           </div>
 
-          <nav className="flex-1 px-3 space-y-1 mt-4">
+          <nav className="flex-1 px-4 space-y-2 mt-4">
             {navItems.map((item) => {
               const active = pathname === item.path;
               return (
                 <Link key={item.path} href={item.path}
-                  className={`flex items-center justify-between px-3.5 py-2 rounded-xl transition-all duration-300 group ${
+                  className={`flex items-center space-x-4 px-5 py-3.5 rounded-2xl transition-all duration-300 group ${
                     active 
-                      ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold' 
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.02] hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-[#FF5E14] text-white shadow-lg shadow-orange-600/25 translate-x-1 font-bold' 
+                      : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.03] hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center">
-                    <item.icon className={`w-4 h-4 mr-3 ${active ? 'scale-110' : ''}`} />
-                    <span className="text-[12px] tracking-tight">{item.name}</span>
-                  </div>
-                  {active && <ChevronRight className="w-3 h-3 opacity-40" />}
+                  <item.icon className={`w-5 h-5 ${active ? 'scale-110' : 'group-hover:scale-110'}`} />
+                  <span className="text-[13px] tracking-tight">{item.name}</span>
                 </Link>
               );
             })}
           </nav>
 
-          <div className="p-4 mt-auto border-t border-slate-100 dark:border-white/5 space-y-2">
-            <button onClick={toggleTheme} className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-transparent dark:border-white/5 transition-all text-[10px] font-bold uppercase tracking-widest">
-              <div className="flex items-center space-x-2">
-                {isDark ? <Moon className="w-3.5 h-3.5 text-indigo-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
-                <span>{isDark ? 'Dark' : 'Light'}</span>
-              </div>
-              <div className={`w-7 h-3.5 rounded-full relative transition-colors ${isDark ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                <div className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all ${isDark ? 'right-0.5' : 'left-0.5'}`}></div>
-              </div>
-            </button>
-            <button onClick={() => signOut(auth)} className="w-full flex items-center px-4 py-2 text-[10px] font-bold text-rose-500 uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all italic leading-none">
-              <LogOut className="w-3.5 h-3.5 mr-2" /> Salir
+          <div className="p-6 mt-auto border-t border-slate-50 dark:border-white/5 space-y-4">
+            <div className="flex items-center justify-between bg-slate-100 dark:bg-white/5 p-1.5 rounded-2xl">
+               <button onClick={() => isDark && toggleTheme()} className={`flex-1 flex justify-center py-2 rounded-xl transition-all ${!isDark ? 'bg-white shadow-md text-[#FF5E14]' : 'text-slate-500 hover:text-white'}`}>
+                 <Sun className="w-4 h-4" />
+               </button>
+               <button onClick={() => !isDark && toggleTheme()} className={`flex-1 flex justify-center py-2 rounded-xl transition-all ${isDark ? 'bg-[#111111] shadow-md text-orange-500' : 'text-slate-500 hover:text-white'}`}>
+                 <Moon className="w-4 h-4" />
+               </button>
+            </div>
+            
+            <button onClick={() => signOut(auth)} className="w-full flex items-center px-4 py-2.5 text-[11px] font-bold text-rose-500 uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all italic leading-none">
+              <LogOut className="w-4 h-4 mr-3" /> Cerrar Sesión
             </button>
           </div>
         </aside>
 
+        {/* CONTENIDO PRINCIPAL */}
         <main className="flex-1 flex flex-col relative overflow-hidden">
-          <header className="h-16 flex items-center justify-between px-8 bg-white/50 dark:bg-[#020617]/50 backdrop-blur-xl z-40 border-b border-slate-200/60 dark:border-white/5">
-            <div className="flex items-center bg-slate-100 dark:bg-white/5 px-4 py-2 rounded-xl w-80 border border-transparent focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-              <Search className="w-3.5 h-3.5 text-slate-400 mr-3" />
-              <input placeholder="Buscar activos..." className="bg-transparent border-none outline-none text-[11px] w-full font-medium" />
+          <header className="h-20 flex items-center justify-between px-10 bg-white/70 dark:bg-[#111111]/70 backdrop-blur-md z-40 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center bg-slate-100 dark:bg-white/5 px-5 py-2.5 rounded-2xl w-96 border border-transparent focus-within:ring-2 focus-within:ring-orange-500/20 transition-all text-black dark:text-white font-medium">
+               <Search className="w-4 h-4 text-slate-400 mr-3" />
+               <input placeholder="Filtrar datos del sistema..." className="bg-transparent border-none outline-none text-[12px] w-full" />
             </div>
-            <div className="flex items-center space-x-3 pl-4 border-l dark:border-white/10 text-right">
-              <div className="hidden sm:block">
-                <p className="text-[10px] font-bold italic uppercase leading-none mb-1">{userEmail.split('@')[0]}</p>
-                <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest leading-none">Master Admin</p>
+            
+            <div className="flex items-center space-x-8">
+              <div className="relative p-2 text-slate-400 hover:text-[#FF5E14] cursor-pointer transition-all hover:scale-110">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-[#FF5E14] rounded-full border-2 border-white dark:border-[#111111]"></span>
               </div>
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg shadow-lg flex items-center justify-center text-white font-black text-[10px] italic">{userEmail.charAt(0).toUpperCase()}</div>
+              <div className="flex items-center space-x-4 pl-4 border-l dark:border-white/10 group cursor-pointer text-right italic font-bold">
+                <div className="hidden sm:block">
+                  <p className="text-[12px] uppercase leading-none mb-1 text-slate-900 dark:text-white">{userEmail.split('@')[0]}</p>
+                  <p className="text-[9px] text-[#FF5E14] uppercase tracking-widest leading-none">Master Admin</p>
+                </div>
+                <div className="w-10 h-10 bg-gradient-to-tr from-[#FF5E14] to-orange-400 rounded-xl shadow-lg flex items-center justify-center text-white font-black text-xs transform group-hover:rotate-6 transition-all uppercase">
+                  {userEmail.charAt(0)}
+                </div>
+              </div>
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar animate-in fade-in duration-1000">
-            <div className="max-w-6xl mx-auto">{children}</div>
+          <div className="flex-1 overflow-y-auto p-10 custom-scrollbar animate-in fade-in duration-1000">
+            <div className="max-w-7xl mx-auto">
+              {children}
+            </div>
           </div>
         </main>
       </div>
