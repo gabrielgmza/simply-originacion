@@ -64,7 +64,6 @@ export default function OperacionesPage() {
 
   const handleLiquidar = async (op: any) => {
     const cbuInfo = op.datosBancarios ? `\n\nCBU/Alias: ${op.datosBancarios.cbuAlias}\nBanco: ${op.datosBancarios.bancoDestino || 'No especificado'}` : '\n\n(No hay CBU registrado)';
-    
     if (!confirm(`¿Confirmas la transferencia de $${op.montoSolicitado.toLocaleString()} a ${op.clienteNombre}? ${cbuInfo}`)) return;
     
     try {
@@ -80,23 +79,10 @@ export default function OperacionesPage() {
 
   const exportarCSV = () => {
     const headers = ['Fecha', 'Financiera', 'Cliente', 'DNI', 'Monto', 'Cuotas', 'Valor Cuota', 'CBU/Alias', 'Banco', 'Estado'];
-    
     const rows = operaciones.map(op => {
       const fecha = op.fechaCreacion ? new Date(op.fechaCreacion.toMillis()).toLocaleDateString('es-AR') : '';
-      return [
-        fecha,
-        op.entidadNombre,
-        op.clienteNombre,
-        op.clienteDni,
-        op.montoSolicitado,
-        op.plazoCuotas,
-        op.valorCuota,
-        op.datosBancarios?.cbuAlias || '',
-        op.datosBancarios?.bancoDestino || '',
-        op.estado
-      ].map(field => `"${field}"`).join(','); 
+      return [fecha, op.entidadNombre, op.clienteNombre, op.clienteDni, op.montoSolicitado, op.plazoCuotas, op.valorCuota, op.datosBancarios?.cbuAlias || '', op.datosBancarios?.bancoDestino || '', op.estado].map(field => `"${field}"`).join(','); 
     });
-
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -105,6 +91,11 @@ export default function OperacionesPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // NUEVO: Función nativa para imprimir a PDF
+  const exportarPDF = () => {
+    window.print();
   };
 
   const getStatusBadge = (estado: string) => {
@@ -120,33 +111,39 @@ export default function OperacionesPage() {
   if (loading) return <div className="p-10 text-center">Cargando operaciones...</div>;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto text-black bg-gray-50 min-h-screen">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-8 max-w-7xl mx-auto text-black bg-gray-50 min-h-screen print:bg-white print:p-0">
+      <div className="flex justify-between items-center mb-8 print:mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Bandeja de Operaciones</h1>
-          <p className="text-sm text-gray-500">Gestión de créditos y liquidaciones</p>
+          <p className="text-sm text-gray-500 print:hidden">Gestión de créditos y liquidaciones</p>
         </div>
-        <div className="flex space-x-4">
+        
+        {/* Usamos print:hidden para que estos botones NO salgan en el PDF */}
+        <div className="flex space-x-3 print:hidden">
+          <button onClick={exportarPDF} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-700 transition-colors flex items-center text-sm shadow-sm">
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            PDF
+          </button>
           <button onClick={exportarCSV} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors flex items-center text-sm shadow-sm">
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-            Exportar a Excel
+            Excel
           </button>
-          <button onClick={() => router.push('/dashboard')} className="text-blue-600 hover:underline flex items-center text-sm">
-            &larr; Volver al Panel
+          <button onClick={() => router.push('/dashboard')} className="text-blue-600 hover:underline flex items-center text-sm ml-2">
+            &larr; Volver
           </button>
         </div>
       </div>
 
-      <div className="bg-white shadow-lg rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-white shadow-lg rounded-xl border border-gray-100 overflow-hidden print:shadow-none print:border-none">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50 border-b border-gray-200 print:bg-gray-100">
                 <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Fecha / Entidad</th>
                 <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Cliente</th>
-                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Detalle del Crédito</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Crédito</th>
                 <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">Estado</th>
-                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">Acciones</th>
+                <th className="p-4 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center print:hidden">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -175,17 +172,15 @@ export default function OperacionesPage() {
                     <td className="p-4 whitespace-nowrap">
                       {getStatusBadge(op.estado)}
                     </td>
-                    <td className="p-4 whitespace-nowrap text-center">
+                    {/* Ocultamos la columna de acciones en el PDF */}
+                    <td className="p-4 whitespace-nowrap text-center print:hidden">
                       {op.estado === 'LISTO_PARA_LIQUIDAR' && (
-                        <button 
-                          onClick={() => handleLiquidar(op)}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"
-                        >
-                          Liquidar Crédito
+                        <button onClick={() => handleLiquidar(op)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm">
+                          Liquidar
                         </button>
                       )}
-                      {op.estado === 'PENDIENTE_FIRMA' && <span className="text-xs text-gray-400 italic">Esperando firma...</span>}
-                      {op.estado === 'LIQUIDADO' && <span className="text-xs text-green-600 font-bold">✓ Finalizado</span>}
+                      {op.estado === 'PENDIENTE_FIRMA' && <span className="text-xs text-gray-400 italic">Esperando...</span>}
+                      {op.estado === 'LIQUIDADO' && <span className="text-xs text-green-600 font-bold">Finalizado</span>}
                     </td>
                   </tr>
                 ))
