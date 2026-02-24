@@ -1,16 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth } from '../../src/lib/firebase';
 import { 
   LayoutDashboard, 
-  PlusCircle, 
+  Zap, 
   FileText, 
-  Building2, 
-  UserCircle, 
+  Globe, 
+  User, 
   LogOut, 
   Sun, 
   Moon, 
@@ -19,24 +19,22 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-const ThemeContext = createContext({ isDark: false, toggle: () => {} });
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [userEmail, setUserEmail] = useState('');
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) router.push('/login');
-      else setUser(u);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) router.push('/login');
+      else setUserEmail(user.email || '');
     });
     const saved = localStorage.getItem('simply-theme');
     if (saved === 'dark') setIsDark(true);
-    return () => unsub();
+    return () => unsubscribe();
   }, [router]);
 
   const toggleTheme = () => {
@@ -49,102 +47,93 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Nueva Originación', path: '/dashboard/originacion', icon: PlusCircle },
+    { name: 'Originación', path: '/dashboard/originacion', icon: Zap },
     { name: 'Operaciones', path: '/dashboard/operaciones', icon: FileText },
-    { name: 'Entidades', path: '/dashboard/entidades', icon: Building2 },
-    { name: 'Mi Cuenta', path: '/dashboard/configuracion', icon: UserCircle },
+    { name: 'Financieras', path: '/dashboard/entidades', icon: Globe },
+    { name: 'Perfil', path: '/dashboard/configuracion', icon: User },
   ];
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggle: toggleTheme }}>
-      <div className={`${isDark ? 'dark' : ''} selection:bg-indigo-500/30`}>
-        <div className="flex h-screen bg-[#fcfdfe] dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans">
-          
-          {/* SIDEBAR MINIMALISTA */}
-          <aside className="w-72 bg-white dark:bg-[#0b0f1a] border-r border-slate-200/60 dark:border-white/5 flex flex-col z-50">
-            <div className="p-8 mb-4">
-              <div className="flex items-center space-x-3 group cursor-pointer">
-                <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform duration-300">
-                  <span className="text-xl font-bold italic">S</span>
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold tracking-tight leading-none">Simply</h1>
-                  <span className="text-[10px] uppercase tracking-[0.3em] font-black text-indigo-500">Bancaria</span>
-                </div>
-              </div>
+    <div className={isDark ? 'dark' : ''}>
+      <div className="flex h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans">
+        
+        {/* SIDEBAR MINIMALISTA */}
+        <aside className="w-72 bg-white dark:bg-[#0b1224] border-r border-slate-200/60 dark:border-white/5 flex flex-col z-50">
+          <div className="p-8 flex items-center space-x-3 group">
+            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20 group-hover:rotate-6 transition-transform">
+              <span className="text-xl font-black italic">S</span>
             </div>
-
-            <nav className="flex-1 px-4 space-y-1.5">
-              {navItems.map((item) => {
-                const active = pathname === item.path;
-                return (
-                  <Link key={item.path} href={item.path}
-                    className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 group ${
-                      active 
-                        ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' 
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <item.icon className={`w-5 h-5 mr-3 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:translate-x-1'}`} />
-                      <span className="text-[13px] font-semibold">{item.name}</span>
-                    </div>
-                    {active && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/50"></div>}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div className="p-6 mt-auto border-t border-slate-100 dark:border-white/5 space-y-4">
-              <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-white/5 hover:opacity-80 transition-all">
-                <div className="flex items-center space-x-3">
-                  {isDark ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
-                  <span className="text-[11px] font-bold uppercase tracking-widest">{isDark ? 'Modo Noche' : 'Modo Día'}</span>
-                </div>
-                <div className={`w-8 h-4 rounded-full relative transition-colors ${isDark ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isDark ? 'right-0.5' : 'left-0.5'}`}></div>
-                </div>
-              </button>
-              
-              <button onClick={() => signOut(auth)} className="w-full flex items-center px-4 py-2 text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all group">
-                <LogOut className="w-4 h-4 mr-3 group-hover:-translate-x-1 transition-transform" />
-                Salir del Sistema
-              </button>
+            <div>
+              <h1 className="text-lg font-black tracking-tight leading-none italic uppercase">Simply</h1>
+              <span className="text-[9px] uppercase tracking-[0.4em] font-bold text-indigo-500">Core Engine</span>
             </div>
-          </aside>
+          </div>
 
-          {/* CONTENIDO PRINCIPAL */}
-          <main className="flex-1 flex flex-col relative overflow-hidden">
-            {/* TOP BAR */}
-            <header className="h-20 border-b border-slate-200/60 dark:border-white/5 flex items-center justify-between px-10 bg-white/50 dark:bg-[#020617]/50 backdrop-blur-md z-40">
-              <div className="flex items-center bg-slate-100 dark:bg-white/5 px-4 py-2 rounded-2xl w-96 border border-transparent focus-within:border-indigo-500/50 transition-all">
-                <Search className="w-4 h-4 text-slate-400 mr-3" />
-                <input placeholder="Buscar operación, DNI o cliente..." className="bg-transparent border-none outline-none text-xs w-full font-medium" />
-              </div>
-              <div className="flex items-center space-x-6">
-                <button className="relative p-2 text-slate-400 hover:text-indigo-500 transition-colors">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white dark:border-[#020617]"></span>
-                </button>
-                <div className="h-8 w-[1px] bg-slate-200 dark:bg-white/10"></div>
-                <div className="flex items-center space-x-3 pl-2">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-[11px] font-bold tracking-tight">{user?.email?.split('@')[0]}</p>
-                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-widest">Administrador</p>
+          <nav className="flex-1 px-4 space-y-1">
+            {navItems.map((item) => {
+              const active = pathname === item.path;
+              return (
+                <Link key={item.path} href={item.path}
+                  className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 group ${
+                    active 
+                      ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' 
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <item.icon className={`w-5 h-5 mr-3 transition-transform ${active ? 'scale-110' : 'group-hover:translate-x-1'}`} />
+                    <span className="text-[13px] font-bold tracking-tight">{item.name}</span>
                   </div>
-                  <div className="w-10 h-10 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-full border border-white dark:border-white/10 shadow-sm"></div>
-                </div>
-              </div>
-            </header>
+                  {active && <ChevronRight className="w-3 h-3 opacity-50" />}
+                </Link>
+              );
+            })}
+          </nav>
 
-            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-              <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
-                {children}
+          <div className="p-6 mt-auto border-t border-slate-100 dark:border-white/5 space-y-4">
+            <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-white/5 hover:opacity-80 transition-all border border-transparent dark:border-white/5">
+              <div className="flex items-center space-x-3">
+                {isDark ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
+                <span className="text-[10px] font-black uppercase tracking-widest">{isDark ? 'Dark' : 'Light'}</span>
+              </div>
+              <div className={`w-8 h-4 rounded-full relative transition-colors ${isDark ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isDark ? 'right-0.5' : 'left-0.5'}`}></div>
+              </div>
+            </button>
+            
+            <button onClick={() => signOut(auth)} className="w-full flex items-center px-4 py-2 text-[10px] font-black text-rose-500 uppercase tracking-widest hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all">
+              <LogOut className="w-4 h-4 mr-3" />
+              Cerrar Sesión
+            </button>
+          </div>
+        </aside>
+
+        {/* CONTENIDO */}
+        <main className="flex-1 flex flex-col relative overflow-hidden">
+          <header className="h-20 border-b border-slate-200/60 dark:border-white/5 flex items-center justify-between px-10 bg-white/50 dark:bg-[#020617]/50 backdrop-blur-xl z-40">
+            <div className="flex items-center bg-slate-100 dark:bg-white/5 px-5 py-2.5 rounded-2xl w-96 border border-transparent focus-within:border-indigo-500/30 transition-all">
+              <Search className="w-4 h-4 text-slate-400 mr-3" />
+              <input placeholder="Buscar..." className="bg-transparent border-none outline-none text-xs w-full font-semibold" />
+            </div>
+            <div className="flex items-center space-x-6">
+              <Bell className="w-5 h-5 text-slate-400 cursor-pointer hover:text-indigo-500 transition-colors" />
+              <div className="flex items-center space-x-3 pl-4 border-l dark:border-white/10 text-right">
+                <div className="hidden sm:block">
+                  <p className="text-[11px] font-black tracking-tight italic uppercase">{userEmail.split('@')[0]}</p>
+                  <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest">Master Admin</p>
+                </div>
+                <div className="w-10 h-10 bg-indigo-600 rounded-full border-2 border-white dark:border-indigo-500 flex items-center justify-center text-white font-black text-xs italic">{userEmail.charAt(0).toUpperCase()}</div>
               </div>
             </div>
-          </main>
-        </div>
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-10 custom-scrollbar animate-in fade-in duration-700">
+            <div className="max-w-7xl mx-auto">
+              {children}
+            </div>
+          </div>
+        </main>
       </div>
-    </ThemeContext.Provider>
+    </div>
   );
 }
