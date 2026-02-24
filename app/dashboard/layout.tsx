@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Originación', path: '/dashboard/originacion', icon: Zap },
     { name: 'Operaciones', path: '/dashboard/operaciones', icon: Layers },
-    { name: 'Entidades', path: '/dashboard/entidades', icon: Globe },
+    { name: 'Financieras', path: '/dashboard/entidades', icon: Globe },
     { name: 'Perfil', path: '/dashboard/configuracion', icon: User },
   ];
 
@@ -64,7 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="text-xl font-black italic tracking-tighter">S</span>
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tighter leading-none italic uppercase">Simply</h1>
+              <h1 className="text-lg font-black tracking-tighter leading-none italic uppercase italic">Simply</h1>
               <span className="text-[9px] uppercase tracking-[0.4em] font-bold text-indigo-500/80">Private Banking</span>
             </div>
           </div>
@@ -96,7 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="p-1.5 rounded-lg bg-white dark:bg-[#0b1224] shadow-sm">
                   {isDark ? <Moon className="w-3.5 h-3.5 text-indigo-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-widest">{isDark ? 'Dark Mode' : 'Light Mode'}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest leading-none">{isDark ? 'Dark Mode' : 'Light Mode'}</span>
               </div>
               <div className={`w-8 h-4 rounded-full relative transition-colors ${isDark ? 'bg-indigo-500' : 'bg-slate-300'}`}>
                 <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all ${isDark ? 'right-0.5' : 'left-0.5'}`}></div>
@@ -110,12 +110,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </aside>
 
-        {/* CONTENIDO PRINCIPAL REFINADO */}
         <main className="flex-1 flex flex-col relative overflow-hidden">
           <header className="h-24 flex items-center justify-between px-12 bg-transparent z-40">
             <div className="flex items-center bg-white/40 dark:bg-white/[0.03] backdrop-blur-md px-6 py-3 rounded-2xl w-96 border border-slate-200/40 dark:border-white/5 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
               <Search className="w-4 h-4 text-slate-400 mr-4" />
-              <input placeholder="Buscar en el ecosistema..." className="bg-transparent border-none outline-none text-xs w-full font-semibold placeholder:text-slate-300 dark:placeholder:text-slate-600" />
+              <input placeholder="Buscar..." className="bg-transparent border-none outline-none text-xs w-full font-semibold placeholder:text-slate-300 dark:placeholder:text-slate-600" />
             </div>
             
             <div className="flex items-center space-x-8">
