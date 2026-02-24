@@ -35,7 +35,7 @@ export default function OperacionesPage() {
         <div className="flex space-x-4">
            <div className="flex items-center bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 px-6 py-3.5 rounded-[1.5rem] shadow-sm w-80">
              <Search className="w-4 h-4 text-slate-400 mr-4" />
-             <input placeholder="Filtrar activos..." className="bg-transparent border-none outline-none text-xs font-semibold leading-none" />
+             <input placeholder="Filtrar activos..." className="bg-transparent border-none outline-none text-xs font-semibold" />
            </div>
            <button className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 p-4 rounded-[1.5rem] shadow-xl hover:scale-110 transition-all leading-none"><Filter className="w-4 h-4" /></button>
         </div>
@@ -70,8 +70,8 @@ export default function OperacionesPage() {
                       <Zap className="w-3 h-3 mr-2 fill-current" /> {op.entidadNombre}
                     </div>
                   </td>
-                  <td className="p-8">
-                    <p className="text-xl text-slate-950 dark:text-white tracking-tighter italic leading-none mb-2">${op.monto?.toLocaleString()}</p>
+                  <td className="p-8 text-slate-950 dark:text-white font-bold">
+                    <p className="text-xl tracking-tighter italic leading-none mb-2">${op.monto?.toLocaleString()}</p>
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Plan {op.cuotas} Meses • {op.sistema}</p>
                   </td>
                   <td className="p-8">

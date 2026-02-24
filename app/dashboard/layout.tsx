@@ -61,10 +61,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <aside className="w-72 m-4 mr-0 bg-white/70 dark:bg-[#0b1224]/70 backdrop-blur-2xl border border-slate-200/60 dark:border-white/5 flex flex-col z-50 rounded-[2.5rem] shadow-2xl shadow-indigo-500/5">
           <div className="p-8 flex items-center space-x-3 group">
             <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-500/20 group-hover:rotate-12 transition-all duration-500">
-              <span className="text-xl font-black italic tracking-tighter leading-none">S</span>
+              <span className="text-xl font-black italic tracking-tighter">S</span>
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tighter leading-none italic uppercase italic">Simply</h1>
+              <h1 className="text-lg font-black tracking-tighter leading-none italic uppercase">Simply</h1>
               <span className="text-[9px] uppercase tracking-[0.4em] font-bold text-indigo-500/80">Private Banking</span>
             </div>
           </div>
@@ -96,10 +96,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="p-1.5 rounded-lg bg-white dark:bg-[#0b1224] shadow-sm">
                   {isDark ? <Moon className="w-3.5 h-3.5 text-indigo-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-widest leading-none">{isDark ? 'Dark Mode' : 'Light Mode'}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest leading-none">{isDark ? 'Noche' : 'Día'}</span>
               </div>
               <div className={`w-8 h-4 rounded-full relative transition-colors ${isDark ? 'bg-indigo-500' : 'bg-slate-300'}`}>
-                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isDark ? 'right-0.5' : 'left-0.5'}`}></div>
+                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all ${isDark ? 'right-0.5' : 'left-0.5'}`}></div>
               </div>
             </button>
             
@@ -114,18 +114,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <header className="h-24 flex items-center justify-between px-12 bg-transparent z-40">
             <div className="flex items-center bg-white/40 dark:bg-white/[0.03] backdrop-blur-md px-6 py-3 rounded-2xl w-96 border border-slate-200/40 dark:border-white/5 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all">
               <Search className="w-4 h-4 text-slate-400 mr-4" />
-              <input placeholder="Explorar activos..." className="bg-transparent border-none outline-none text-xs w-full font-semibold placeholder:text-slate-300 dark:placeholder:text-slate-600" />
+              <input placeholder="Buscar operaciones..." className="bg-transparent border-none outline-none text-xs w-full font-semibold" />
             </div>
             
             <div className="flex items-center space-x-8">
-              <Bell className="w-5 h-5 text-slate-400 cursor-pointer hover:text-indigo-500 transition-colors" />
+              <div className="relative cursor-pointer hover:scale-110 transition-transform">
+                <Bell className="w-5 h-5 text-slate-400" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-[#fcfdfe] dark:border-[#020617]"></span>
+              </div>
               <div className="h-10 w-[1px] bg-slate-200 dark:bg-white/5"></div>
               <div className="flex items-center space-x-4 pl-2 group cursor-pointer text-right">
-                <div className="hidden sm:block text-slate-900 dark:text-white">
-                  <p className="text-[11px] font-black tracking-tight italic uppercase leading-none">{userEmail.split('@')[0]}</p>
-                  <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest leading-none mt-1">Master Admin</p>
+                <div className="hidden sm:block">
+                  <p className="text-[11px] font-black tracking-tight italic uppercase text-slate-900 dark:text-white leading-none mb-1">{userEmail.split('@')[0]}</p>
+                  <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest leading-none">Master Admin</p>
                 </div>
-                <div className="w-11 h-11 bg-indigo-600 rounded-2xl border-2 border-white dark:border-indigo-500 flex items-center justify-center text-white font-black text-xs italic">{userEmail.charAt(0).toUpperCase()}</div>
+                <div className="w-11 h-11 bg-gradient-to-br from-indigo-600 to-indigo-400 rounded-2xl border-2 border-white dark:border-indigo-900 shadow-xl flex items-center justify-center text-white font-black text-xs italic transform group-hover:rotate-6 transition-all">
+                  {userEmail.charAt(0).toUpperCase()}
+                </div>
               </div>
             </div>
           </header>
