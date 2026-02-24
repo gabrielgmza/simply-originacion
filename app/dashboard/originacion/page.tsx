@@ -4,20 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
-
-const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 4000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-  return (
-    <div className={`fixed top-6 right-6 z-[100] flex items-center p-5 min-w-[350px] rounded-3xl shadow-2xl border-4 ${type === 'success' ? 'bg-emerald-600 border-emerald-400' : 'bg-rose-600 border-rose-400'} text-white`}>
-      <p className="font-black text-sm uppercase tracking-tight flex-1">{message}</p>
-      <button onClick={onClose} className="ml-4 font-bold text-xl">✕</button>
-    </div>
-  );
-};
+import { auth, db } from '../../../src/lib/firebase';
+import { Zap, ShieldCheck, CreditCard, ArrowRight, User as UserIcon, Wallet, Layers } from 'lucide-react';
 
 export default function OriginacionPage() {
   const router = useRouter();
@@ -31,15 +19,16 @@ export default function OriginacionPage() {
   const [cuotas, setCuotas] = useState('12');
   const [cuadData, setCuadData] = useState<any>(null);
   const [bcraData, setBcraData] = useState<any>(null);
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) return router.push('/login');
-      setCurrentUser(user);
-      fetchEntities();
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) router.push('/login');
+      else {
+        setCurrentUser(user);
+        fetchEntities();
+      }
     });
-    return () => unsubscribe();
+    return () => unsub();
   }, [router]);
 
   const fetchEntities = async () => {
@@ -63,31 +52,31 @@ export default function OriginacionPage() {
 
     const gastosAdmin = capital * ((p.gastosAdminPct || 0) / 100);
     const gastosOtorg = capital * ((p.gastosOtorgamientoPct || 0) / 100);
-    const capFin = capital + gastosAdmin;
+    const capTotal = capital + gastosAdmin;
     const seguro = capital * ((p.seguroVida || 0) / 100);
 
     let cuotaBase = 0;
     if (sistema === 'ALEMAN') {
-      cuotaBase = (capFin / n) + (capFin * i);
+      cuotaBase = (capTotal / n) + (capTotal * i);
     } else if (sistema === 'MIXTO') {
-      const f = (capFin * i) / (1 - Math.pow(1 + i, -n));
-      const a = (capFin / n) + (capFin * i);
+      const f = (capTotal * i) / (1 - Math.pow(1 + i, -n));
+      const a = (capTotal / n) + (capTotal * i);
       cuotaBase = (f + a) / 2;
     } else {
-      cuotaBase = (capFin * i) / (1 - Math.pow(1 + i, -n));
+      cuotaBase = (capTotal * i) / (1 - Math.pow(1 + i, -n));
     }
 
     const cuotaFinal = cuotaBase + seguro + ((p.feeFijo || 0) / n);
-    const montoNeto = capital - gastosOtorg;
+    const montoLiquido = capital - gastosOtorg;
     const tea = (Math.pow(1 + i, 12) - 1) * 100;
-    const cft = (Math.pow((cuotaFinal * n) / montoNeto, 1 / (n / 12)) - 1) * 100;
+    const cft = (Math.pow((cuotaFinal * n) / montoLiquido, 1 / (n / 12)) - 1) * 100;
 
-    return { cuota: cuotaFinal, tea, cft, sistema, neto: montoNeto };
+    return { cuota: cuotaFinal, tea, cft, sistema, neto: montoLiquido, entName: ent?.fantasyName || ent?.name };
   };
 
   const sim = calcularFinanzas();
 
-  const handleConsultarDni = async (e: React.FormEvent) => {
+  const handleConsultar = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -105,68 +94,151 @@ export default function OriginacionPage() {
     } finally { setLoading(false); }
   };
 
+  const handleGenerar = async () => {
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'operaciones'), {
+        entidadId: selectedEntityId,
+        entidadNombre: sim?.entName,
+        clienteNombre: cuadData.nombre,
+        clienteDni: dni,
+        monto: parseFloat(monto),
+        cuotas: parseInt(cuotas),
+        valorCuota: sim?.cuota,
+        sistema: sim?.sistema,
+        cft: sim?.cft,
+        estado: 'PENDIENTE_FIRMA',
+        vendedor: currentUser?.email,
+        fechaCreacion: serverTimestamp()
+      });
+      setStep(3);
+    } finally { setLoading(false); }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto space-y-10 p-6 bg-slate-50 min-h-screen">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <h1 className="text-5xl font-black text-slate-950 uppercase italic leading-none tracking-tighter">Simulador Originación</h1>
-      <div className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-slate-400 overflow-hidden min-h-[500px]">
+    <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-1000">
+      
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b dark:border-white/5 pb-10">
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2 text-indigo-500 font-black text-[10px] uppercase tracking-[0.5em] italic">
+            <Zap className="w-3 h-3 fill-current" />
+            <span>Originación de Activos</span>
+          </div>
+          <h1 className="text-6xl font-black tracking-tighter uppercase italic text-slate-950 dark:text-white leading-none">Simulador</h1>
+        </div>
+      </div>
+
+      <div className="bg-white/80 dark:bg-[#0b1224]/80 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-slate-200/60 dark:border-white/5 overflow-hidden min-h-[600px]">
         {step === 1 && (
-          <form onSubmit={handleConsultarDni} className="max-w-lg mx-auto py-24 px-8 space-y-12">
+          <form onSubmit={handleConsultar} className="max-w-xl mx-auto py-24 px-10 space-y-12 animate-in zoom-in-95 duration-500">
              <div className="space-y-4">
-                <label className="text-[11px] font-black text-slate-600 uppercase tracking-widest pl-4">Financiera</label>
-                <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)} className="w-full p-6 bg-slate-100 border-4 border-slate-800 rounded-[2.5rem] font-black text-slate-950 text-xl">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] ml-6 flex items-center">
+                  <Layers className="w-3 h-3 mr-2" /> Financiera Originadora
+                </label>
+                <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)} className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-[1.5rem] px-8 py-5 text-lg font-black text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all appearance-none cursor-pointer">
                    {entities.map(e => <option key={e.id} value={e.id}>{e.fantasyName || e.name}</option>)}
                 </select>
              </div>
              <div className="space-y-4 text-center">
-                <label className="text-[11px] font-black text-slate-600 uppercase tracking-widest">DNI Solicitante</label>
-                <input type="text" value={dni} onChange={e => setDni(e.target.value.replace(/\D/g, ''))} className="w-full text-center text-7xl font-black p-6 bg-transparent border-b-[15px] border-blue-600 outline-none text-slate-950" placeholder="00000000" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Identificación del Solicitante</label>
+                <input type="text" required value={dni} onChange={e => setDni(e.target.value.replace(/\D/g, ''))} className="w-full text-center text-8xl font-black p-4 bg-transparent border-b-[12px] border-indigo-600 outline-none text-slate-950 dark:text-white tracking-tighter" placeholder="00000000" />
              </div>
-             <button type="submit" className="w-full bg-blue-600 text-white font-black py-8 rounded-[3rem] text-2xl hover:bg-blue-700 transition-all active:scale-95 shadow-xl">
-                {loading ? 'VALIDANDO...' : 'INICIAR EVALUACIÓN'}
+             <button type="submit" disabled={loading || dni.length < 7} className="w-full bg-indigo-600 text-white font-black py-8 rounded-[2.5rem] text-xl shadow-2xl shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all uppercase italic tracking-widest">
+                {loading ? 'Consultando Bases...' : 'Iniciar Evaluación Dual'}
              </button>
           </form>
         )}
+
         {step === 2 && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 animate-in slide-in-from-bottom-10 duration-700">
-             <div className="lg:col-span-8 p-14 space-y-12 border-r-4 border-slate-100">
-                <div className="bg-slate-100 p-10 rounded-[3.5rem] border-4 border-slate-800 shadow-inner">
-                   <h3 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter">{cuadData?.nombre}</h3>
-                   <p className="text-lg font-bold text-blue-700 mt-2 uppercase tracking-widest">DNI {dni} • Margen: ${cuadData?.margenAfectable?.toLocaleString()}</p>
+             <div className="lg:col-span-7 p-12 space-y-12 border-r dark:border-white/5">
+                <div className="flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] p-10 rounded-[3rem] border border-slate-200 dark:border-white/5 shadow-inner">
+                   <div className="flex items-center space-x-8">
+                      <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-indigo-400 rounded-3xl flex items-center justify-center text-white font-black text-5xl shadow-2xl shadow-indigo-500/20">{cuadData?.nombre?.charAt(0)}</div>
+                      <div>
+                        <h3 className="text-3xl font-black text-slate-950 dark:text-white uppercase italic leading-none tracking-tighter">{cuadData?.nombre}</h3>
+                        <p className="text-sm font-bold text-indigo-500 uppercase tracking-widest mt-2">DNI {dni} • SIT BCRA: {bcraData?.situacion}</p>
+                      </div>
+                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-4 font-black">
-                   <div className="space-y-4"><label className="text-[12px] uppercase ml-10 text-slate-500">Monto Solicitado</label><input type="number" value={monto} onChange={e => setMonto(e.target.value)} className="w-full p-8 bg-slate-100 border-4 border-slate-800 rounded-[3rem] text-5xl text-slate-950 focus:bg-white outline-none shadow-inner" /></div>
-                   <div className="space-y-4"><label className="text-[12px] uppercase ml-10 text-slate-500">Cuotas</label><select value={cuotas} onChange={e => setCuotas(e.target.value)} className="w-full p-8 bg-slate-100 border-4 border-slate-800 rounded-[3rem] text-5xl text-slate-950 focus:bg-white outline-none cursor-pointer">
-                     {entities.find(e => e.id === selectedEntityId)?.parametros?.plazos?.split(',').map((p:any) => (<option key={p} value={p.trim()}>{p.trim()} CUOTAS</option>))}
-                   </select></div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-8">Capital Solicitado ($)</label>
+                      <input type="number" value={monto} onChange={e => setMonto(e.target.value)} className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-[2rem] px-8 py-6 text-4xl font-black text-slate-950 dark:text-white focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all" />
+                   </div>
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-8">Plazo (Meses)</label>
+                      <select value={cuotas} onChange={e => setCuotas(e.target.value)} className="w-full bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10 rounded-[2rem] px-8 py-6 text-4xl font-black text-slate-950 dark:text-white outline-none">
+                         {entities.find(e => e.id === selectedEntityId)?.parametros?.plazos?.split(',').map((p:any) => (
+                           <option key={p} value={p.trim()}>{p.trim()} CUOTAS</option>
+                         ))}
+                      </select>
+                   </div>
                 </div>
-                <div className="bg-indigo-700 p-10 rounded-[3.5rem] text-white shadow-2xl flex justify-between items-center">
-                   <p className="text-3xl font-black uppercase italic tracking-tighter leading-none">Sistema {sim?.sistema}</p>
+
+                <div className="bg-indigo-600/5 dark:bg-indigo-500/5 p-10 rounded-[3rem] flex justify-between items-center border border-indigo-500/20">
+                   <div className="flex items-center">
+                      <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mr-6"><Wallet className="w-6 h-6" /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest leading-none mb-1">Amortización Activa</p>
+                        <p className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Sistema {sim?.sistema}</p>
+                      </div>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Margen Disponible</p>
+                      <p className="text-xl font-black text-slate-900 dark:text-white">${cuadData?.margenAfectable?.toLocaleString()}</p>
+                   </div>
                 </div>
              </div>
-             <div className="lg:col-span-4 bg-slate-950 p-14 flex flex-col justify-between text-white shadow-[inset_0_4px_30px_rgba(0,0,0,0.5)]">
-                <div className="text-center space-y-16">
-                   <div>
-                      <p className="text-blue-500 text-[14px] font-black uppercase tracking-[0.6em] mb-12 italic">Cuota Mensual Fija</p>
-                      <h2 className="text-[9rem] font-black text-white italic tracking-tighter leading-none drop-shadow-[0_20px_40px_rgba(59,130,246,0.5)]">
+
+             <div className="lg:col-span-5 bg-slate-950 p-16 flex flex-col justify-between text-white relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent"></div>
+                <div className="text-center space-y-16 relative z-10">
+                   <div className="space-y-4">
+                      <p className="text-indigo-500 text-[12px] font-black uppercase tracking-[0.6em] italic">Cuota Mensual Fija</p>
+                      <h2 className="text-[9rem] font-black italic tracking-tighter leading-none drop-shadow-[0_20px_40px_rgba(59,130,246,0.4)]">
                         ${sim?.cuota.toLocaleString(undefined, {maximumFractionDigits:0})}
                       </h2>
                    </div>
-                   <div className="grid grid-cols-2 gap-8 text-center font-black">
-                      <div className="bg-white/5 p-8 rounded-[2.5rem] border-2 border-white/10 backdrop-blur-xl">
-                         <p className="text-[11px] text-slate-500 uppercase mb-3 leading-none opacity-60">T.E.Anual</p>
-                         <p className="text-4xl tracking-tighter leading-none">{sim?.tea.toFixed(1)}%</p>
+                   
+                   <div className="grid grid-cols-2 gap-8">
+                      <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-xl hover:bg-white/10 transition-colors">
+                         <p className="text-[10px] text-slate-500 font-black uppercase mb-3 opacity-60 leading-none">T.E.A.</p>
+                         <p className="text-5xl font-black tracking-tighter">{sim?.tea.toFixed(1)}%</p>
                       </div>
-                      <div className="bg-white/5 p-8 rounded-[2.5rem] border-2 border-white/10 backdrop-blur-xl">
-                         <p className="text-[11px] text-emerald-500 uppercase mb-3 leading-none opacity-80">C.F.T. Real</p>
-                         <p className="text-4xl text-emerald-400 tracking-tighter leading-none">{sim?.cft.toFixed(1)}%</p>
+                      <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-xl hover:bg-white/10 transition-colors">
+                         <p className="text-[10px] text-emerald-500 font-black uppercase mb-3 opacity-90 leading-none">C.F.T. Real</p>
+                         <p className="text-5xl font-black text-emerald-400 tracking-tighter">{sim?.cft.toFixed(1)}%</p>
                       </div>
                    </div>
                 </div>
-                <button onClick={() => setStep(3)} className="w-full bg-blue-600 text-white py-12 rounded-[3.5rem] font-black text-4xl hover:bg-blue-500 shadow-[0_40px_90px_-15px_rgba(37,99,235,0.5)] active:scale-95 transition-all">
-                   GENERAR Y FIRMAR
-                </button>
+                
+                <div className="pt-16 space-y-8 relative z-10">
+                   <div className={`p-8 rounded-[2.5rem] text-center text-[10px] font-black uppercase border-2 tracking-[0.4em] shadow-2xl ${bcraData?.apto && sim?.cuota <= cuadData?.margenAfectable ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
+                      {bcraData?.apto && sim?.cuota <= cuadData?.margenAfectable ? '✓ APTO ORIGINACIÓN' : '✕ RECHAZO AUTOMÁTICO'}
+                   </div>
+                   <button onClick={handleGenerar} disabled={loading || !bcraData?.apto || (sim ? sim.cuota > cuadData?.margenAfectable : true)} className="w-full bg-indigo-600 text-white py-10 rounded-[3rem] font-black text-3xl shadow-[0_40px_90px_-15px_rgba(79,70,229,0.5)] hover:bg-indigo-500 hover:scale-[1.02] active:scale-95 transition-all uppercase italic tracking-widest">
+                      Generar y Firmar
+                   </button>
+                </div>
              </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="text-center py-48 space-y-16 animate-in zoom-in-95 duration-1000">
+             <div className="relative inline-block">
+                <div className="absolute inset-0 bg-emerald-500 rounded-full blur-[100px] opacity-30 animate-pulse"></div>
+                <div className="h-48 w-48 bg-emerald-100 text-emerald-600 rounded-[4rem] flex items-center justify-center mx-auto shadow-2xl relative z-10 border-4 border-white">
+                   <ShieldCheck className="w-24 h-24" />
+                </div>
+             </div>
+             <div className="space-y-4">
+                <h2 className="text-8xl font-black text-slate-950 dark:text-white uppercase italic tracking-tighter leading-none">¡Éxito Total!</h2>
+                <p className="text-slate-400 text-2xl font-black uppercase tracking-[0.5em] italic opacity-50">Contrato digital enviado al cliente.</p>
+             </div>
+             <button onClick={() => setStep(1)} className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 px-24 py-8 rounded-[3rem] font-black uppercase tracking-[0.8em] text-sm hover:scale-105 active:scale-95 transition-all shadow-2xl">Nueva Simulación</button>
           </div>
         )}
       </div>
