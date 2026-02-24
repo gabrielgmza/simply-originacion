@@ -11,8 +11,8 @@ function getValidCuits(dniStr: string) {
     const multipliers = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
     let sum = 0;
     for (let i = 0; i < 10; i++) sum += parseInt(base[i]) * multipliers[i];
-    let rem = sum % 11;
-    let v = rem === 0 ? 0 : 11 - rem;
+    const rem = sum % 11;
+    const v = rem === 0 ? 0 : 11 - rem;
     
     if (v !== 10) {
         cuits.push(base + v);
