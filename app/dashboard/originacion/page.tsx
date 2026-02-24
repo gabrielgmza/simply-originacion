@@ -38,9 +38,24 @@ export default function OriginacionPage() {
       const snap = await getDocs(collection(db, 'entities'));
       const ents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setEntities(ents);
-      if (ents.length > 0) setSelectedEntityId(ents[0].id);
+      if (ents.length > 0) {
+        setSelectedEntityId(ents[0].id);
+        // Autoseleccionar la primera cuota disponible de la entidad
+        const plazos = ents[0].parametros?.plazos?.split(',') || ['12'];
+        setCuotas(plazos[0].trim());
+      }
     } catch (error) {
       console.error("Error cargando entidades:", error);
+    }
+  };
+
+  const handleEntityChange = (e: any) => {
+    const newId = e.target.value;
+    setSelectedEntityId(newId);
+    const ent = entities.find(x => x.id === newId);
+    if (ent && ent.parametros?.plazos) {
+        const plazos = ent.parametros.plazos.split(',');
+        setCuotas(plazos[0].trim()); // Reseteamos la cuota al cambiar de financiera
     }
   };
 
@@ -72,32 +87,50 @@ export default function OriginacionPage() {
   };
 
   const calcularCuota = () => {
-    const capital = parseFloat(monto);
-    if (isNaN(capital) || capital <= 0) return { cuota: 0, desglose: null };
+    const capitalSolicitado = parseFloat(monto);
+    if (isNaN(capitalSolicitado) || capitalSolicitado <= 0) return { cuota: 0, desglose: null };
     
-    const plazo = parseInt(cuotas);
+    const plazo = parseInt(cuotas) || 12;
     const entidad = entities.find(e => e.id === selectedEntityId);
+    const p = entidad?.parametros || {};
     
-    const tna = (entidad?.parametros?.tna || 120) / 100;
-    const gastosAdmin = entidad?.parametros?.gastosAdmin || 0;
-    const seguroPorcentaje = (entidad?.parametros?.seguroVida || 0) / 100;
+    // Extracción de variables dinámicas porcentuales
+    const tna = (p.tna || 120) / 100;
+    const gastosAdminPct = (p.gastosAdminPct || 0) / 100;
+    const gastosOtorgPct = (p.gastosOtorgamientoPct || 0) / 100;
+    const seguroVidaPct = (p.seguroVida || 0) / 100;
+    const feeFijo = p.feeFijo || 0;
 
-    const capitalTotal = capital + gastosAdmin;
-    const interesTotal = capitalTotal * (tna * (plazo / 12));
-    const cuotaPura = (capitalTotal + interesTotal) / plazo;
-    const costoSeguroMensual = capital * seguroPorcentaje;
+    // Cálculo matemático: Los gastos se suman al capital a financiar
+    const montoGastosAdmin = capitalSolicitado * gastosAdminPct;
+    const montoGastosOtorg = capitalSolicitado * gastosOtorgPct;
+    const capitalTotalFinanciado = capitalSolicitado + montoGastosAdmin + montoGastosOtorg + feeFijo;
+    
+    // Interés Simple (Base para el MVP, luego se puede pasar a Sistema Francés)
+    const interesTotal = capitalTotalFinanciado * (tna * (plazo / 12));
+    const cuotaPura = (capitalTotalFinanciado + interesTotal) / plazo;
+    
+    // El seguro de vida suele calcularse sobre saldo deudor o capital inicial por mes
+    const costoSeguroMensual = capitalSolicitado * seguroVidaPct; 
     
     const cuotaFinal = cuotaPura + costoSeguroMensual;
 
     return { 
       cuota: cuotaFinal, 
-      desglose: { capitalTotal, cuotaPura, costoSeguroMensual, gastosAdmin }
+      desglose: { 
+        capitalSolicitado, 
+        capitalTotalFinanciado, 
+        montoGastosAdmin, 
+        montoGastosOtorg, 
+        feeFijo,
+        costoSeguroMensual 
+      }
     };
   };
 
   const handleContinuar = async () => {
     setLoading(true);
-    const { cuota } = calcularCuota();
+    const { cuota, desglose } = calcularCuota();
     const entidadSeleccionada = entities.find(e => e.id === selectedEntityId);
 
     try {
@@ -110,6 +143,7 @@ export default function OriginacionPage() {
         montoSolicitado: parseFloat(monto),
         plazoCuotas: parseInt(cuotas),
         valorCuota: cuota,
+        desgloseEstructura: desglose, // Guardamos la estructura de costos históricos
         estado: 'PENDIENTE_FIRMA',
         vendedorEmail: currentUser?.email,
         riesgoBcra: bcraData,
@@ -119,7 +153,7 @@ export default function OriginacionPage() {
       setOperacionId(operacionRef.id);
       setStep(3);
     } catch (error) {
-      console.error("Error al guardar operación:", error);
+      console.error("Error al guardar:", error);
       alert("Hubo un error al generar la operación.");
     } finally {
       setLoading(false);
@@ -134,53 +168,41 @@ export default function OriginacionPage() {
     const linkFirma = `https://simply-originacion.vercel.app/firma/${operacionId}`; 
     const entidad = entities.find(e => e.id === selectedEntityId);
     
-    const texto = `Hola *${cuadData.nombre}* 👋,\n\nTe escribo de *${entidad?.name || 'nuestra financiera'}*. Tu crédito por *$${capitalStr}* en ${cuotas} cuotas fijas de *$${cuotaStr}* está pre-aprobado.\n\nPara avanzar con el depósito, por favor ingresa a este link seguro para validar tu identidad y firmar la solicitud:\n👉 ${linkFirma}\n\nCualquier duda, estoy a disposición.`;
+    const texto = `Hola *${cuadData.nombre}* 👋,\n\nTe escribo de *${entidad?.name || 'nuestra financiera'}*. Tu crédito por *$${capitalStr}* en ${cuotas} cuotas fijas de *$${cuotaStr}* está pre-aprobado.\n\nPara avanzar, ingresa a este link seguro para firmar la solicitud:\n👉 ${linkFirma}`;
     
     return `https://wa.me/?text=${encodeURIComponent(texto)}`;
   };
 
   const simulacion = calcularCuota();
+  const entidadActiva = entities.find(e => e.id === selectedEntityId);
+  const plazosDisponibles = entidadActiva?.parametros?.plazos?.split(',') || ['6', '12', '18', '24'];
 
   return (
-    <div className="p-8 max-w-5xl mx-auto text-black bg-gray-50 min-h-screen">
+    <div className="max-w-5xl mx-auto text-black bg-gray-50 min-h-screen animate-fade-in-up">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-blue-900">Nueva Operación</h1>
-          <p className="text-sm text-gray-500">Simulador y Motor de Riesgo (CUAD + BCRA)</p>
+          <p className="text-sm text-gray-500">Simulador y Motor de Riesgo Dual</p>
         </div>
-        <button onClick={() => router.push('/dashboard')} className="text-blue-600 hover:underline">
-          &larr; Volver al Panel
-        </button>
       </div>
 
       <div className="bg-white p-8 shadow-lg rounded-xl border border-gray-100 min-h-[400px]">
         
         {step === 1 && (
-          <form onSubmit={handleConsultarDni} className="space-y-6 text-center max-w-sm mx-auto py-6 animate-fade-in-up">
+          <form onSubmit={handleConsultarDni} className="space-y-6 text-center max-w-sm mx-auto py-6">
             <div className="text-left mb-6">
-              <label className="block text-sm font-bold text-gray-700 mb-2">1. Seleccionar Entidad Originadora</label>
-              <select 
-                value={selectedEntityId} 
-                onChange={(e) => setSelectedEntityId(e.target.value)}
-                className="w-full p-3 border-2 border-blue-100 rounded-lg bg-blue-50 text-blue-900 font-medium focus:outline-none focus:border-blue-500"
-              >
-                {entities.map(e => (
-                  <option key={e.id} value={e.id}>{e.name}</option>
-                ))}
+              <label className="block text-sm font-bold text-gray-700 mb-2">1. Seleccionar Entidad</label>
+              <select value={selectedEntityId} onChange={handleEntityChange} className="w-full p-3 border-2 border-blue-100 rounded-lg bg-blue-50 text-blue-900 font-medium focus:outline-none focus:border-blue-500">
+                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
             </div>
-
             <div className="bg-blue-50 p-4 rounded-full w-20 h-20 mx-auto flex items-center justify-center mb-4">
               <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 21h7a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v11m0 5l4.879-4.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242z"></path></svg>
             </div>
             <h2 className="text-xl font-bold text-gray-800">2. Motor de Evaluación</h2>
-            <p className="text-sm text-gray-500">Consultaremos el Margen del Gobierno y el Historial Crediticio del BCRA simultáneamente.</p>
-            
-            <input type="text" required placeholder="Ej: 30123456" value={dni} onChange={e => setDni(e.target.value.replace(/\D/g, ''))} maxLength={8}
-              className="w-full text-center text-2xl tracking-widest p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 outline-none transition-colors" />
-            
+            <input type="text" required placeholder="Ej: 30123456" value={dni} onChange={e => setDni(e.target.value.replace(/\D/g, ''))} maxLength={8} className="w-full text-center text-2xl tracking-widest p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 outline-none" />
             <button type="submit" disabled={loading || dni.length < 7 || !selectedEntityId} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex justify-center items-center">
-              {loading ? <><span className="animate-spin h-5 w-5 mr-3 border-t-2 border-white rounded-full"></span> Evaluando Cliente...</> : 'Iniciar Evaluación Dual'}
+              {loading ? <span className="animate-spin h-5 w-5 mr-3 border-t-2 border-white rounded-full"></span> : 'Iniciar Evaluación Dual'}
             </button>
           </form>
         )}
@@ -189,38 +211,24 @@ export default function OriginacionPage() {
           <div className="space-y-8 animate-fade-in-up">
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Tarjeta 1: CUAD (Margen) */}
-              <div className="bg-green-50 border-l-4 border-green-500 p-4 flex flex-col justify-center rounded-r-lg shadow-sm">
+              {/* Tarjeta CUAD */}
+              <div className="bg-green-50 border-l-4 border-green-500 p-4 flex flex-col justify-center rounded-r-lg">
                 <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-green-600 uppercase font-black flex items-center">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                        CUAD - Gobierno
-                    </p>
-                    <span className="bg-green-200 text-green-800 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span>
+                    <p className="text-xs text-green-600 uppercase font-black">CUAD - Gobierno</p>
                 </div>
                 <p className="text-sm text-green-900 font-bold uppercase truncate">{cuadData.nombre}</p>
-                <p className="text-xs text-green-700 truncate">{cuadData.reparticion}</p>
                 <div className="mt-3 pt-3 border-t border-green-200">
-                  <p className="text-xs text-green-800 font-medium">Margen Disponible para Descuento</p>
+                  <p className="text-xs text-green-800 font-medium">Margen Disponible</p>
                   <p className="text-3xl font-black text-green-700">${cuadData.margenAfectable.toLocaleString()}</p>
                 </div>
               </div>
-
-              {/* Tarjeta 2: BCRA (Riesgo) */}
-              <div className={`border-l-4 p-4 flex flex-col justify-center rounded-r-lg shadow-sm ${bcraData.apto ? 'bg-blue-50 border-blue-500' : 'bg-red-50 border-red-500'}`}>
+              {/* Tarjeta BCRA */}
+              <div className={`border-l-4 p-4 flex flex-col justify-center rounded-r-lg ${bcraData.apto ? 'bg-blue-50 border-blue-500' : 'bg-red-50 border-red-500'}`}>
                 <div className="flex items-center justify-between mb-2">
-                    <p className={`text-xs uppercase font-black flex items-center ${bcraData.apto ? 'text-blue-600' : 'text-red-600'}`}>
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                        BCRA - Central de Deudores
-                    </p>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${bcraData.apto ? 'bg-blue-600' : 'bg-red-600'}`}>
-                        Sit. {bcraData.situacion}
-                    </span>
+                    <p className={`text-xs uppercase font-black ${bcraData.apto ? 'text-blue-600' : 'text-red-600'}`}>BCRA - Central de Deudores</p>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white ${bcraData.apto ? 'bg-blue-600' : 'bg-red-600'}`}>Sit. {bcraData.situacion}</span>
                 </div>
-                
                 <p className={`text-sm font-bold uppercase ${bcraData.apto ? 'text-blue-900' : 'text-red-900'}`}>{bcraData.descripcion}</p>
-                <p className={`text-xs truncate ${bcraData.apto ? 'text-blue-700' : 'text-red-700'}`}>Reportado por: {bcraData.entidades.join(', ')}</p>
-                
                 <div className={`mt-3 pt-3 border-t ${bcraData.apto ? 'border-blue-200' : 'border-red-200'}`}>
                   <p className={`text-xs font-medium ${bcraData.apto ? 'text-blue-800' : 'text-red-800'}`}>Deuda Total Declarada</p>
                   <p className={`text-3xl font-black ${bcraData.apto ? 'text-blue-700' : 'text-red-700'}`}>${bcraData.deudaTotal.toLocaleString()}</p>
@@ -228,41 +236,49 @@ export default function OriginacionPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t">
               <div className="space-y-4">
-                <h3 className="font-bold text-gray-800 border-b pb-2">
-                  Simulador <span className="text-blue-600 text-sm font-normal">({entities.find(e => e.id === selectedEntityId)?.name})</span>
+                <h3 className="font-bold text-gray-800 pb-2 flex justify-between items-center">
+                  Simulador 
+                  <span className="text-blue-600 text-xs bg-blue-50 px-2 py-1 rounded border border-blue-100">{entidadActiva?.name} - TNA {entidadActiva?.parametros?.tna}%</span>
                 </h3>
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monto a solicitar ($)</label>
-                  <input type="number" value={monto} onChange={e => setMonto(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 text-lg" placeholder="Ej. 500000" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Capital a solicitar ($)</label>
+                  <input type="number" value={monto} onChange={e => setMonto(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 text-lg font-semibold" placeholder="Ej. 500000" />
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Plan de Cuotas</label>
-                  <select value={cuotas} onChange={e => setCuotas(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 text-lg">
-                    <option value="6">6 Cuotas</option><option value="12">12 Cuotas</option><option value="18">18 Cuotas</option><option value="24">24 Cuotas</option>
+                  <select value={cuotas} onChange={e => setCuotas(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 text-lg font-semibold">
+                    {plazosDisponibles.map((p: string) => (
+                      <option key={p} value={p.trim()}>{p.trim()} Cuotas Fijas</option>
+                    ))}
                   </select>
                 </div>
 
-                {simulacion.desglose && monto && (
-                  <div className="bg-gray-50 p-3 rounded text-xs text-gray-600 border border-gray-200">
-                    <p className="flex justify-between"><span>Gastos Adm.:</span> <span>${simulacion.desglose.gastosAdmin.toLocaleString()}</span></p>
-                    <p className="flex justify-between"><span>Seguro Vida (mensual):</span> <span>${simulacion.desglose.costoSeguroMensual.toLocaleString(undefined, {maximumFractionDigits:0})}</span></p>
+                {simulacion.desglose && parseFloat(monto) > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-lg text-xs text-gray-600 border border-gray-200 space-y-1">
+                    <p className="flex justify-between font-bold text-gray-800 border-b pb-1 mb-1"><span>Desglose de Cargos</span></p>
+                    <p className="flex justify-between"><span>Gastos Admin. ({entidadActiva?.parametros?.gastosAdminPct}%):</span> <span>${simulacion.desglose.montoGastosAdmin.toLocaleString()}</span></p>
+                    <p className="flex justify-between"><span>Gastos Otorg. ({entidadActiva?.parametros?.gastosOtorgamientoPct}%):</span> <span>${simulacion.desglose.montoGastosOtorg.toLocaleString()}</span></p>
+                    {simulacion.desglose.feeFijo > 0 && <p className="flex justify-between"><span>Fee Fijo:</span> <span>${simulacion.desglose.feeFijo.toLocaleString()}</span></p>}
+                    <p className="flex justify-between pt-1 font-semibold text-gray-700"><span>Capital Financiado:</span> <span>${simulacion.desglose.capitalTotalFinanciado.toLocaleString()}</span></p>
+                    <p className="flex justify-between text-blue-600 mt-2"><span>Seguro Vida (Mensual):</span> <span>+ ${simulacion.desglose.costoSeguroMensual.toLocaleString(undefined, {maximumFractionDigits:0})}</span></p>
                   </div>
                 )}
               </div>
 
               <div className="bg-gray-800 text-white p-6 rounded-xl flex flex-col justify-center space-y-4 shadow-inner">
                 <div className="text-center">
-                  <p className="text-gray-400 text-sm">Valor de Cuota Mensual</p>
+                  <p className="text-gray-400 text-sm">Valor de Cuota Mensual Final</p>
                   <p className="text-5xl font-bold text-blue-400">${simulacion.cuota.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                  <p className="text-xs text-gray-500 mt-2">CFT {entidadActiva?.parametros?.cft}% | TEA {entidadActiva?.parametros?.tea}%</p>
                 </div>
                 
                 {!bcraData.apto ? (
-                  <div className="bg-red-500/20 text-red-300 p-3 rounded-lg text-sm text-center border border-red-500/50 flex flex-col items-center">
-                      <svg className="w-6 h-6 mb-1 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                      <strong>BLOQUEADO POR RIESGO</strong>
-                      <span className="text-xs mt-1">El cliente posee Situación {bcraData.situacion} en el BCRA.</span>
+                  <div className="bg-red-500/20 text-red-300 p-3 rounded-lg text-sm text-center border border-red-500/50">
+                      <strong>BLOQUEADO POR RIESGO (SIT. {bcraData.situacion})</strong>
                   </div>
                 ) : simulacion.cuota > cuadData.margenAfectable ? (
                   <div className="bg-yellow-500/20 text-yellow-300 p-3 rounded-lg text-sm text-center border border-yellow-500/50">
@@ -276,10 +292,10 @@ export default function OriginacionPage() {
                 
                 <button 
                   disabled={!monto || simulacion.cuota > cuadData.margenAfectable || loading || !bcraData.apto}
-                  className="w-full bg-blue-600 py-4 rounded-lg font-bold hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 transition-colors mt-4 flex justify-center items-center shadow-lg disabled:shadow-none text-lg"
+                  className="w-full bg-blue-600 py-4 rounded-lg font-bold hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 transition-colors mt-4 text-lg"
                   onClick={handleContinuar}
                 >
-                  {loading ? <span className="animate-spin h-5 w-5 border-t-2 border-white rounded-full"></span> : 'Generar Operación →'}
+                  {loading ? 'Procesando...' : 'Generar Operación →'}
                 </button>
               </div>
             </div>
@@ -293,29 +309,16 @@ export default function OriginacionPage() {
               <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-800">¡Operación Creada!</h2>
-            <p className="text-gray-500 text-sm">Financiera: <strong>{entities.find(e => e.id === selectedEntityId)?.name}</strong></p>
-            
-            <div className="bg-gray-50 rounded-lg p-5 text-left max-w-sm mx-auto border border-gray-200 mt-4">
-              <p className="flex justify-between text-sm mb-2"><span className="text-gray-500">Cliente:</span> <span className="font-bold">{cuadData?.nombre}</span></p>
-              <p className="flex justify-between text-sm mb-2"><span className="text-gray-500">Capital:</span> <span className="font-bold">${parseFloat(monto).toLocaleString()}</span></p>
-              <div className="border-t border-gray-200 pt-2 mt-2">
-                <p className="flex justify-between text-sm"><span className="text-gray-600 font-bold">Cuota:</span> <span className="font-bold text-blue-600">{cuotas} cuotas de ${simulacion.cuota.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></p>
-              </div>
-            </div>
-
             <div className="max-w-sm mx-auto space-y-3 pt-4">
-              <a href={generarLinkWhatsapp()} target="_blank" rel="noopener noreferrer"
-                className="w-full flex items-center justify-center bg-[#25D366] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#128C7E] transition-colors shadow-md">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824zm-3.425-10.416c-4.418 0-8 3.582-8 8s3.582 8 8 8 8-3.582 8-8-3.582-8-8-8zm0 14.5c-1.144 0-2.261-.303-3.242-.876l-3.605.946.963-3.513c-.636-1.015-.97-2.193-.97-3.407 0-3.584 2.916-6.5 6.5-6.5s6.5 2.916 6.5 6.5-2.916 6.5-6.5 6.5z"/></svg>
+              <a href={generarLinkWhatsapp()} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center bg-[#25D366] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#128C7E] shadow-md">
                 Enviar Link a Cliente
               </a>
-              <button onClick={() => { setStep(1); setDni(''); setMonto(''); setCuadData(null); setBcraData(null); }} className="w-full text-blue-600 font-medium hover:underline transition-colors mt-2 text-sm">
+              <button onClick={() => { setStep(1); setDni(''); setMonto(''); setCuadData(null); setBcraData(null); }} className="w-full text-blue-600 font-medium hover:underline text-sm pt-2">
                 Nueva Consulta DNI
               </button>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
