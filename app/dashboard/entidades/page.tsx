@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+// Ruta relativa corregida para la profundidad app/dashboard/entidades/
+import { db } from '../../../src/lib/firebase';
 import { Building2, ShieldCheck, Zap, ArrowRight, Save, Info, Plus, Percent } from 'lucide-react';
 
 const Toast = ({ message, type, onClose }: any) => {
@@ -56,7 +57,7 @@ export default function EntidadesPage() {
       }
       setIsEditing(false);
       fetchEntities();
-    } catch (e) { setToast({msg: "Error de red", type: "error"}); }
+    } catch (e) { setToast({msg: "Error", type: "error"}); }
     finally { setLoading(false); }
   };
 
@@ -66,7 +67,7 @@ export default function EntidadesPage() {
         <Icon className="w-3 h-3 mr-1.5 text-indigo-500" />
         {label}
       </label>
-      <input type={type} value={value} onChange={onChange} className="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 text-[13px] font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" />
+      <input type={type} value={value} onChange={onChange} className="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 text-[13px] font-bold focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm" />
     </div>
   );
 
@@ -76,20 +77,20 @@ export default function EntidadesPage() {
 
       <div className="flex items-end justify-between border-b dark:border-white/5 pb-8">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black tracking-tighter uppercase italic text-slate-950 dark:text-white">Entidades</h1>
+          <h1 className="text-5xl font-black tracking-tighter uppercase italic text-slate-950 dark:text-white leading-none">Entidades</h1>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Core de Administración SaaS</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 text-slate-900 dark:text-white">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2">
           <div className="bg-white dark:bg-[#0b1224] p-10 rounded-[3rem] shadow-sm border border-slate-200 dark:border-white/5">
             <form onSubmit={handleSubmit} className="space-y-12">
               <div className="space-y-8">
-                <h3 className="text-xs font-black uppercase tracking-widest text-indigo-500 border-b dark:border-white/5 pb-4">Información Corporativa</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest text-indigo-500 border-b dark:border-white/5 pb-4">Información de Contratación</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <Input icon={Building2} label="Razón Social" value={platformData.name} onChange={(e:any) => setPlatformData({...platformData, name: e.target.value})} />
-                  <Input icon={ShieldCheck} label="CUIT / ID Fiscal" value={platformData.cuit} onChange={(e:any) => setPlatformData({...platformData, cuit: e.target.value})} />
+                  <Input icon={ShieldCheck} label="CUIT / Tax ID" value={platformData.cuit} onChange={(e:any) => setPlatformData({...platformData, cuit: e.target.value})} />
                   <div className="bg-indigo-600 p-8 rounded-[2.5rem] flex flex-col justify-center text-center shadow-2xl ring-8 ring-indigo-50 dark:ring-indigo-500/10">
                      <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-1 opacity-70 italic">SaaS Fee (%)</label>
                      <input type="number" step="0.1" value={platformData.comisionSaaS} onChange={e => setPlatformData({...platformData, comisionSaaS: parseFloat(e.target.value)})} className="bg-transparent text-white text-6xl font-black text-center outline-none tracking-tighter" />
@@ -102,8 +103,8 @@ export default function EntidadesPage() {
                 <h3 className="text-xs font-black uppercase tracking-widest text-emerald-500 border-b dark:border-white/5 pb-4">Parámetros Bancarios</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Sistema</label>
-                    <select value={financialData.sistemaAmortizacion} onChange={(e:any) => setFinancialData({...financialData, sistemaAmortizacion: e.target.value})} className="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 text-[13px] font-bold outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer">
+                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-4 leading-none">Sistema</label>
+                    <select value={financialData.sistemaAmortizacion} onChange={(e:any) => setFinancialData({...financialData, sistemaAmortizacion: e.target.value})} className="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl px-6 py-4 text-[13px] font-bold outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer text-slate-900 dark:text-white">
                       <option value="FRANCES">SISTEMA FRANCÉS</option>
                       <option value="ALEMAN">SISTEMA ALEMÁN</option>
                       <option value="MIXTO">SISTEMA MIXTO</option>
@@ -129,7 +130,7 @@ export default function EntidadesPage() {
              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-transparent"></div>
              <Info className="w-10 h-10 mb-8 text-indigo-500 relative z-10" />
              <h4 className="text-2xl font-black italic uppercase tracking-tighter mb-4 relative z-10 leading-none">Core Strategy</h4>
-             <p className="text-sm font-medium text-slate-400 leading-relaxed relative z-10">
+             <p className="text-sm font-medium text-slate-400 leading-relaxed relative z-10 opacity-80">
                La configuración del Core impacta en tiempo real. Los cambios en el sistema de amortización solo afectarán a las nuevas simulaciones.
              </p>
           </div>
@@ -138,10 +139,10 @@ export default function EntidadesPage() {
             <h5 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 ml-6">Red de Operadoras</h5>
             <div className="space-y-4">
               {entities.map(ent => (
-                <div key={ent.id} onClick={() => { setIsEditing(true); setCurrentId(ent.id); }} className="bg-white dark:bg-[#0b1224] p-6 rounded-[2rem] border border-slate-200 dark:border-white/5 hover:border-indigo-500 transition-all cursor-pointer group shadow-sm flex justify-between items-center">
+                <div key={ent.id} onClick={() => { setIsEditing(true); setCurrentId(ent.id); }} className="bg-white dark:bg-[#0b1224] p-6 rounded-[2.2rem] border border-slate-200 dark:border-white/5 hover:border-indigo-500 transition-all cursor-pointer group shadow-sm flex justify-between items-center">
                   <div>
-                    <p className="text-sm font-black uppercase italic tracking-tighter">{ent.name}</p>
-                    <p className="text-[10px] font-bold text-indigo-500 mt-1 uppercase tracking-widest">SaaS: {ent.comisionSaaS}%</p>
+                    <p className="text-sm font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">{ent.name}</p>
+                    <p className="text-[10px] font-bold text-indigo-500 mt-1 uppercase tracking-widest leading-none">SaaS: {ent.comisionSaaS}%</p>
                   </div>
                   <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-2 transition-all" />
                 </div>

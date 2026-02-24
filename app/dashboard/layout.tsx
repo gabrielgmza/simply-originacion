@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-// Importación simplificada para evitar errores de compilación
-import { auth } from '../../lib/firebase';
+// Ruta relativa corregida para la carpeta src/lib
+import { auth } from '../../src/lib/firebase';
 import { 
   LayoutDashboard, 
   Zap, 
@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={isDark ? 'dark' : ''}>
-      <div className="flex h-screen bg-[#fcfdfe] dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans">
+      <div className="flex h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors duration-500 font-sans">
         
         <aside className="w-72 bg-white dark:bg-[#0b1224] border-r border-slate-200/60 dark:border-white/5 flex flex-col z-50">
           <div className="p-8 flex items-center space-x-3 group">
@@ -91,7 +91,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </nav>
 
           <div className="p-6 mt-auto border-t border-slate-100 dark:border-white/5 space-y-4">
-            <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-white/5 hover:opacity-80 transition-all border border-transparent dark:border-white/5">
+            <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-white/5 border border-transparent dark:border-white/5">
               <div className="flex items-center space-x-3">
                 {isDark ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
                 <span className="text-[10px] font-black uppercase tracking-widest">{isDark ? 'Dark' : 'Light'}</span>
@@ -116,9 +116,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <div className="flex items-center space-x-6">
               <Bell className="w-5 h-5 text-slate-400 cursor-pointer hover:text-indigo-500 transition-colors" />
-              <div className="flex items-center space-x-3 pl-4 border-l dark:border-white/10 text-right">
-                <div className="hidden sm:block text-slate-900 dark:text-white">
-                  <p className="text-[11px] font-black tracking-tight italic uppercase">{userEmail.split('@')[0]}</p>
+              <div className="flex items-center space-x-3 pl-4 border-l dark:border-white/10 text-right text-slate-900 dark:text-white">
+                <div className="hidden sm:block">
+                  <p className="text-[11px] font-black tracking-tight italic uppercase leading-none">{userEmail.split('@')[0]}</p>
                   <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest leading-none mt-1">Master Admin</p>
                 </div>
                 <div className="w-10 h-10 bg-indigo-600 rounded-full border-2 border-white dark:border-indigo-500 flex items-center justify-center text-white font-black text-xs italic">{userEmail.charAt(0).toUpperCase()}</div>
