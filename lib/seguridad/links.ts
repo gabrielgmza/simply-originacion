@@ -1,8 +1,8 @@
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, updateDoc, addDoc, doc, serverTimestamp } from "firebase/firestore";
 
-export const generarNuevoLinkFirma = async (operacionId: string, clienteId: string) => {
-  // 1. Buscar y anular links anteriores inmediatamente
+export const manejarMagicLink = async (operacionId: string, clienteId: string) => {
+  // 1. Buscar links activos previos y anularlos ipso facto
   const q = query(
     collection(db, "magic_links"), 
     where("operacionId", "==", operacionId),
@@ -10,24 +10,25 @@ export const generarNuevoLinkFirma = async (operacionId: string, clienteId: stri
   );
   
   const snap = await getDocs(q);
-  const promesasAnulacion = snap.docs.map(d => 
+  const anulaciones = snap.docs.map(d => 
     updateDoc(doc(db, "magic_links", d.id), { 
       estado: "ANULADO",
-      motivoAnulacion: "REGENERACION_SOLICITADA",
+      motivo: "REGENERACION_DE_LINK",
       fechaAnulacion: serverTimestamp() 
     })
   );
-  await Promise.all(promesasAnulacion);
+  await Promise.all(anulaciones);
 
-  // 2. Crear el nuevo Link con expiración (24hs)
-  const nuevoLink = await addDoc(collection(db, "magic_links"), {
+  // 2. Crear el nuevo token único
+  const nuevoToken = Math.random().toString(36).substring(2, 15);
+  await addDoc(collection(db, "magic_links"), {
     operacionId,
     clienteId,
-    token: Math.random().toString(36).substring(2, 15),
+    token: nuevoToken,
     estado: "ACTIVO",
     fechaCreacion: serverTimestamp(),
-    expira: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    expira: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24hs de validez
   });
 
-  return nuevoLink.id;
+  return nuevoToken;
 };

@@ -1,16 +1,18 @@
-export const camposPdfExtendido = (cliente: any, financiero: any) => {
+export const generarDataContrato = (cliente: any, financiero: any) => {
   return {
-    "TITULAR_NOMBRE_COMPLETO": `${cliente.nombre1} ${cliente.nombre2 || ''} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`,
-    "DNI_CUIL": cliente.dni,
-    "DOMICILIO": `${cliente.direccion}, ${cliente.localidad}, ${cliente.provincia} (CP: ${cliente.cp})`,
-    "TELEFONOS": `Personal: ${cliente.telefono} | Laboral: ${cliente.telLaboral}`,
-    "INFO_BANCARIA": `Banco: ${cliente.banco} | CBU: ${cliente.cbu}`,
-    "MATRIZ_FINANCIERA": {
-      "TNA": `${financiero.tna}%`,
-      "CFT": `${financiero.cft}%`,
-      "GASTOS_OTORGAMIENTO": `$${financiero.gastos.toLocaleString()}`,
-      "SEGURO_VIDA": `$${financiero.seguro.toLocaleString()}`,
-      "PUNITORIO_DIARIO": "0.12%"
-    }
+    // Datos de Identidad Separados
+    titular: `${cliente.nombre1} ${cliente.nombre2 || ''} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`,
+    dni_cuil: cliente.dni,
+    // Ubicación y Contacto
+    domicilio: `${cliente.direccion}, ${cliente.localidad}, ${cliente.provincia}`,
+    contacto: `Email: ${cliente.email} | Tel: ${cliente.telefono}`,
+    // Datos Bancarios
+    banco: cliente.banco,
+    cbu: cliente.cbu,
+    // Matriz Financiera Completa
+    tna: `${financiero.tna}%`,
+    cft: `${financiero.cft}%`,
+    gastos_porcentuales: `$${financiero.gastos.toLocaleString()}`,
+    punitorio_diario: "0.12%"
   };
 };
