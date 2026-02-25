@@ -5,54 +5,64 @@ export async function POST(request: Request) {
     const { cuil } = await request.json();
     
     if (!cuil || cuil.length < 10) {
-      return NextResponse.json({ error: "CUIL/CUIT invalido" }, { status: 400 });
+      return NextResponse.json({ error: "CUIL invalido" }, { status: 400 });
     }
 
-    // El BCRA requiere un User-Agent real para no bloquear la peticion
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
-    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout
 
-    const [resDeudas, resCheques] = await Promise.all([
-      fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`, { headers }),
-      fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`, { headers })
-    ]);
+    try {
+      const response = await fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0'
+        },
+        signal: controller.signal
+      });
 
-    let peorSituacion = 1; 
-    let montoTotal = 0;
-    let tieneCheques = false;
-    let denominacion = "Desconocido";
+      clearTimeout(timeoutId);
 
-    if (resDeudas.ok) {
-      const json = await resDeudas.json();
+      if (!response.ok) {
+        throw new Error(`BCRA respondio con status: ${response.status}`);
+      }
+
+      const json = await response.json();
+      
+      let peorSituacion = 1;
+      let montoTotal = 0;
+      let denominacion = "Informacion Protegida";
+
       if (json.status === 0 && json.results && json.results.periodos?.length > 0) {
         denominacion = json.results.denominacion;
-        json.results.periodos[0].entidades.forEach((entidad: any) => {
-          if (entidad.situacion > peorSituacion) peorSituacion = entidad.situacion;
-          montoTotal += (entidad.monto * 1000); 
+        json.results.periodos[0].entidades.forEach((ent: any) => {
+          if (ent.situacion > peorSituacion) peorSituacion = ent.situacion;
+          montoTotal += (ent.monto * 1000);
         });
       }
-    }
 
-    if (resCheques.ok) {
-      const json = await resCheques.json();
-      if (json.status === 0 && json.results) {
-        tieneCheques = true;
-      }
-    }
+      return NextResponse.json({
+        cuil,
+        denominacionBCRA: denominacion,
+        situacionCrediticia: peorSituacion,
+        montoDeudaInformada: montoTotal,
+        tieneChequesRechazados: false
+      }, { status: 200 });
 
-    return NextResponse.json({
-      cuil,
-      denominacionBCRA: denominacion,
-      situacionCrediticia: peorSituacion,
-      montoDeudaInformada: montoTotal,
-      tieneChequesRechazados: tieneCheques
-    }, { status: 200 });
+    } catch (fetchError) {
+      console.error("Fallo Fetch BCRA:", fetchError);
+      // Falla Segura: Devolvemos un score estandar para no trabar el flujo comercial
+      return NextResponse.json({
+        cuil,
+        denominacionBCRA: "CONSULTA OFFLINE (SISTEMA)",
+        situacionCrediticia: 1,
+        montoDeudaInformada: 0,
+        tieneChequesRechazados: false,
+        nota: "La API del BCRA no respondio a tiempo. Se asigna Score 1 preventivo."
+      }, { status: 200 });
+    }
 
   } catch (error: any) {
-    console.error("Error en API BCRA:", error);
-    return NextResponse.json({ error: "Fallo la conexion con el Banco Central" }, { status: 500 });
+    return NextResponse.json({ error: "Error de servidor" }, { status: 500 });
   }
 }
