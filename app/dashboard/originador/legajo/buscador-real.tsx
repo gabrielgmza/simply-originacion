@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Search, Gavel, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Search, Gavel, ShieldCheck, ExternalLink } from "lucide-react";
 
 export default function BuscadorScoringReal() {
   const [dni, setDni] = useState("");
@@ -16,7 +16,6 @@ export default function BuscadorScoringReal() {
 
     setLoading(true);
     try {
-      // Llamamos a nuestro backend (API Route) que hace el scraping real
       const res = await fetch('/api/scoring', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,16 +60,33 @@ export default function BuscadorScoringReal() {
           {resultado.judicial.tieneRegistros ? (
             <div className="bg-red-500/10 border border-red-500/50 p-8 rounded-[40px] space-y-4">
               <div className="flex items-center gap-3 text-red-500 font-black italic text-xl">
-                <Gavel size={28}/> QUIEBRA/CONCURSO DETECTADO EN MENDOZA
+                <Gavel size={28}/> QUIEBRA/CONCURSO DETECTADO
               </div>
               <p className="text-white text-sm">Validado contra el apellido: <strong>{resultado.apellidoValidado.toUpperCase()}</strong></p>
               
               <div className="grid grid-cols-1 gap-4 mt-4">
                 {resultado.judicial.procesos.map((proc: any, idx: number) => (
-                  <div key={idx} className="bg-black/40 p-4 rounded-2xl border border-red-500/20 grid grid-cols-3 gap-4">
-                    <div><p className="text-gray-500 text-[10px] uppercase font-black">Expediente</p><p className="text-white font-bold">{proc.expediente}</p></div>
-                    <div><p className="text-gray-500 text-[10px] uppercase font-black">Tipo</p><p className="text-red-500 font-black">{proc.tipo}</p></div>
-                    <div><p className="text-gray-500 text-[10px] uppercase font-black">Carátula</p><p className="text-white font-bold text-xs truncate">{proc.caratula}</p></div>
+                  <div key={idx} className="bg-black/40 p-5 rounded-3xl border border-red-500/20 flex flex-col gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div><p className="text-gray-500 text-[10px] uppercase font-black">Expediente</p><p className="text-white font-bold">{proc.expediente}</p></div>
+                      <div><p className="text-gray-500 text-[10px] uppercase font-black">Tipo - Fecha Inicio</p><p className="text-red-500 font-black">{proc.tipo} ({proc.fechaInicio})</p></div>
+                      <div><p className="text-gray-500 text-[10px] uppercase font-black">Carátula</p><p className="text-white font-bold text-xs truncate">{proc.caratula}</p></div>
+                    </div>
+                    
+                    {/* BOTÓN DE ENLACE AL DOCUMENTO */}
+                    {proc.linkDocumento && (
+                      <div className="pt-4 border-t border-red-500/10">
+                        <a 
+                          href={proc.linkDocumento} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="bg-red-600 hover:bg-red-500 text-white py-3 px-6 rounded-xl text-xs font-black flex items-center justify-center gap-2 w-max transition-all"
+                        >
+                          <ExternalLink size={16} />
+                          VER DOCUMENTO OFICIAL
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
