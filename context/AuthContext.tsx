@@ -46,9 +46,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setEntidadData({ id: entidadSnap.id, ...entidadSnap.data() } as Entidad);
               }
             }
+          } else {
+            console.warn("Usuario fantasma detectado (sin perfil). Cerrando sesion forzadamente...");
+            await auth.signOut();
+            setUserData(null);
+            setEntidadData(null);
           }
         } catch (error) {
           console.error("Error al obtener datos:", error);
+          await auth.signOut();
         }
       } else {
         setUserData(null);

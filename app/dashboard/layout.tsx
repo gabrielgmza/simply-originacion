@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { LogOut, Building2, Users, LayoutDashboard, Settings, FileText } from "lucide-react";
+import { LogOut, Building2, Users, LayoutDashboard, Settings, FileText, Loader2, AlertCircle } from "lucide-react";
 import { auth } from "@/lib/firebase";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -17,17 +17,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [userData, loading, router]);
 
-  if (loading || !userData) {
-    return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-[#FF5E14]">Cargando interfaz...</div>;
+  const forzarCierreSesion = () => {
+    auth.signOut();
+    router.push("/login");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-[#FF5E14]">
+        <Loader2 className="animate-spin mb-4" size={40} />
+        <p className="text-gray-400">Cargando interfaz...</p>
+      </div>
+    );
+  }
+
+  if (!userData) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-white">
+        <AlertCircle size={48} className="text-red-500 mb-4" />
+        <p className="mb-6 text-gray-400">Sesion invalida o perfil no encontrado.</p>
+        <button onClick={forzarCierreSesion} className="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold">
+          Forzar Cierre de Sesion
+        </button>
+      </div>
+    );
   }
 
   const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
   const nombreFantasia = entidadData?.nombreFantasia || "Simply Core";
-
-  const cerrarSesion = () => {
-    auth.signOut();
-    router.push("/login");
-  };
 
   return (
     <div className="flex h-screen bg-[#050505] text-[#F8F9FA] font-sans overflow-hidden">
@@ -75,8 +92,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <p className="text-xs text-gray-400 truncate">{userData.email}</p>
             <p className="text-xs font-bold mt-0.5" style={{ color: colorPrimario }}>{userData.rol.replace("_", " ")}</p>
           </div>
-          <button onClick={cerrarSesion} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-950/30 rounded-lg transition-colors">
-            <LogOut size={16} /> Cerrar Sesión
+          <button onClick={forzarCierreSesion} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-950/30 rounded-lg transition-colors">
+            <LogOut size={16} /> Cerrar Sesion
           </button>
         </div>
       </aside>
