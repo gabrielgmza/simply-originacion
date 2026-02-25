@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, CheckCircle, AlertTriangle, FileText, User, CreditCard, ShieldCheck } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, AlertTriangle, FileText, User, CreditCard, ShieldCheck, Download, FileSignature } from "lucide-react";
 
 export default function LegajoDetalle() {
   const { userData, entidadData } = useAuth();
@@ -15,6 +15,7 @@ export default function LegajoDetalle() {
   const [operacion, setOperacion] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [procesando, setProcesando] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
 
   useEffect(() => {
     const cargarOperacion = async () => {
@@ -56,6 +57,31 @@ export default function LegajoDetalle() {
     }
   };
 
+  const compilarContratoFinal = async () => {
+    setGenerandoPdf(true);
+    try {
+      const res = await fetch("/api/documentos/generar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operacionId: operacion.id, entidadId: entidadData?.id })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error);
+      
+      setOperacion({
+        ...operacion,
+        legajo: { ...operacion.legajo, contratoFinalPdf: data.url }
+      });
+      
+      alert("¡Contrato fusionado exitosamente!");
+    } catch (error: any) {
+      alert(error.message || "Error al compilar el PDF. Verifica tener plantillas mapeadas.");
+    } finally {
+      setGenerandoPdf(false);
+    }
+  };
+
   const formatearMoneda = (monto: number) => {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(monto || 0);
   };
@@ -87,7 +113,7 @@ export default function LegajoDetalle() {
           <span className="text-sm text-gray-500">Estado actual:</span>
           {operacion.estado === "LIQUIDADO" && <span className="flex items-center gap-1 px-3 py-1.5 bg-green-950/30 text-green-500 border border-green-900/50 rounded-full text-sm font-bold"><CheckCircle size={16}/> Liquidado</span>}
           {operacion.estado === "RECHAZADO" && <span className="flex items-center gap-1 px-3 py-1.5 bg-red-950/30 text-red-500 border border-red-900/50 rounded-full text-sm font-bold"><AlertTriangle size={16}/> Rechazado</span>}
-          {operacion.estado === "PENDIENTE_DOCS" && <span className="flex items-center gap-1 px-3 py-1.5 bg-yellow-950/30 text-yellow-500 border border-yellow-900/50 rounded-full text-sm font-bold"><Clock size={16}/> Pendiente</span>}
+          {(operacion.estado === "PENDIENTE_DOCS" || operacion.estado === "PENDIENTE_FIRMA_CLIENTE") && <span className="flex items-center gap-1 px-3 py-1.5 bg-yellow-950/30 text-yellow-500 border border-yellow-900/50 rounded-full text-sm font-bold"><Clock size={16}/> Pendiente</span>}
         </div>
       </div>
 
@@ -109,7 +135,7 @@ export default function LegajoDetalle() {
               <div>
                 <p className="text-xs text-gray-500 mb-1">Score BCRA</p>
                 <p className="flex items-center gap-2 text-green-500 font-bold">
-                  <ShieldCheck size={16} /> Situación {operacion.cliente?.scoreBcra || "N/A"}
+                  <ShieldCheck size={16} /> Situacion {operacion.cliente?.scoreBcra || "N/A"}
                 </p>
               </div>
             </div>
@@ -122,7 +148,7 @@ export default function LegajoDetalle() {
           </h3>
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-gray-500 mb-1">Línea de Crédito / Producto</p>
+              <p className="text-xs text-gray-500 mb-1">Linea de Credito / Producto</p>
               <p className="font-medium">{operacion.tipo}</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -140,28 +166,65 @@ export default function LegajoDetalle() {
       </div>
 
       <div className="bg-[#0A0A0A] border border-gray-800 rounded-xl p-6 mb-8">
-         <h3 className="text-lg font-bold flex items-center gap-2 mb-4 border-b border-gray-800 pb-3" style={{ color: colorPrimario }}>
-            <FileText size={20} /> Documentación y Firma
-         </h3>
+         <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
+           <h3 className="text-lg font-bold flex items-center gap-2" style={{ color: colorPrimario }}>
+              <FileText size={20} /> Documentacion Compilada
+           </h3>
+           
+           {operacion.legajo?.firmaUrl && !operacion.legajo?.contratoFinalPdf && puedeLiquidar && (
+             <button 
+               onClick={compilarContratoFinal}
+               disabled={generandoPdf}
+               className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+             >
+               {generandoPdf ? <Loader2 className="animate-spin" size={16} /> : <FileSignature size={16} />}
+               Compilar Contrato Legal
+             </button>
+           )}
+         </div>
          
-         <div className="mt-4">
-            <p className="text-sm text-gray-400 mb-3">Firma Digital Capturada:</p>
-            {operacion.legajo?.firmaUrl ? (
-              <div className="bg-white rounded-lg p-2 max-w-sm border border-gray-700">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={operacion.legajo.firmaUrl} alt="Firma del Titular" className="w-full h-auto rounded" />
-              </div>
-            ) : (
-              <p className="text-gray-500 italic text-sm">Firma no disponible en este legajo.</p>
-            )}
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div>
+              <p className="text-sm text-gray-400 mb-3">Firma Digital Cruda:</p>
+              {operacion.legajo?.firmaUrl ? (
+                <div className="bg-white rounded-lg p-2 max-w-sm border border-gray-700">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={operacion.legajo.firmaUrl} alt="Firma del Titular" className="w-full h-auto rounded" />
+                </div>
+              ) : (
+                <p className="text-gray-500 italic text-sm p-4 bg-[#111] rounded-lg border border-gray-800">El cliente aun no ha firmado.</p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-400 mb-3">Expediente Legal (PDF):</p>
+              {operacion.legajo?.contratoFinalPdf ? (
+                <div className="p-6 bg-[#111] border border-green-900/50 rounded-xl text-center">
+                  <FileText size={40} className="mx-auto text-green-500 mb-3" />
+                  <p className="font-bold text-white mb-3">Documento Fusionado Exitosamente</p>
+                  <a 
+                    href={operacion.legajo.contratoFinalPdf} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors text-sm"
+                  >
+                    <Download size={16} /> Descargar PDF Legal
+                  </a>
+                </div>
+              ) : (
+                <div className="p-6 bg-[#111] border border-gray-800 rounded-xl text-center">
+                  <p className="text-gray-500 text-sm">Contrato pendiente de compilacion.</p>
+                </div>
+              )}
+            </div>
          </div>
       </div>
 
-      {puedeLiquidar && operacion.estado === "PENDIENTE_DOCS" && (
+      {puedeLiquidar && (operacion.estado === "PENDIENTE_DOCS" || operacion.estado === "PENDIENTE_FIRMA_CLIENTE") && (
         <div className="bg-[#111] border border-gray-700 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <h4 className="font-bold text-white mb-1">Resolución del Legajo</h4>
-            <p className="text-sm text-gray-400">Verifica cuidadosamente los datos antes de aprobar el desembolso.</p>
+            <h4 className="font-bold text-white mb-1">Resolucion del Legajo</h4>
+            <p className="text-sm text-gray-400">Verifica que el contrato este compilado antes de aprobar el desembolso.</p>
           </div>
           <div className="flex w-full md:w-auto gap-3">
             <button 
@@ -173,7 +236,7 @@ export default function LegajoDetalle() {
             </button>
             <button 
               onClick={() => actualizarEstado("LIQUIDADO")}
-              disabled={procesando}
+              disabled={procesando || !operacion.legajo?.contratoFinalPdf}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold transition-colors disabled:opacity-50"
             >
               {procesando ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />}
