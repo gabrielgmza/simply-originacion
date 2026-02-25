@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-// 1. Súper Función: Algoritmo oficial para calcular el CUIL
 function calcularCuil(dni: string, sexo: string): string {
     const dniStr = dni.padStart(8, '0');
     let prefijo = sexo === 'M' ? '20' : '27';
@@ -25,49 +24,41 @@ function calcularCuil(dni: string, sexo: string): string {
 export async function POST(req: Request) {
     try {
         const { dni, sexo } = await req.json();
-        
-        if (!dni || !sexo) {
-            return NextResponse.json({ error: "Faltan datos de DNI o Sexo" }, { status: 400 });
-        }
-
         const cuil = calcularCuil(dni, sexo);
         console.log(`[SCORING] Consultando CUIL: ${cuil}`);
 
-        // 2. CONSULTA API PÚBLICA BCRA (Sin captchas, sin Puppeteer)
-        let bcraData = { tieneDeudas: false, peorSituacion: "1" };
+        let bcraData = { tieneDeudas: false, peorSituacion: "1", error: false };
         
         try {
             const resBcra = await fetch(`https://api.bcra.gob.ar/centraldedeudores/v1/Deudas/${cuil}`, {
                 method: 'GET',
-                headers: { 'Accept': 'application/json' }
+                headers: { 
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' 
+                }
             });
 
             if (resBcra.ok) {
                 const data = await resBcra.json();
-                
                 if (data?.results?.deudas && data.results.deudas.length > 0) {
                     bcraData.tieneDeudas = true;
                     const situaciones = data.results.deudas.map((d: any) => parseInt(d.situacion));
                     bcraData.peorSituacion = Math.max(...situaciones).toString();
                 }
             } else if (resBcra.status === 404) {
-                // 404 en el BCRA significa que no está en la base de deudores (SITUACIÓN 1)
+                // 404 real: Está limpio
                 bcraData.tieneDeudas = false;
+            } else {
+                // Cualquier otro código (403, 500) significa que el BCRA nos bloqueó o se cayó
+                bcraData.error = true;
             }
         } catch (error) {
-            console.error("[SCORING] Error consultando BCRA:", error);
+            bcraData.error = true;
         }
 
-        // 3. RETORNO SEGURO
-        return NextResponse.json({
-            success: true,
-            cuilCalculado: cuil,
-            bcra: bcraData,
-            judicial: { tieneRegistros: false } 
-        });
+        return NextResponse.json({ success: true, cuilCalculado: cuil, bcra: bcraData });
 
     } catch (error: any) {
-        console.error("[SCORING] Error crítico en servidor:", error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }
