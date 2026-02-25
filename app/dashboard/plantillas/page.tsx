@@ -5,10 +5,13 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { FileSignature, UploadCloud, FileText, Loader2, Trash2, Plus, LayoutTemplate, ShieldAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileSignature, UploadCloud, FileText, Loader2, Trash2, Plus, LayoutTemplate, ShieldAlert, CheckCircle2 } from "lucide-react";
 
 export default function PlantillasPage() {
   const { userData, entidadData } = useAuth();
+  const router = useRouter();
+  
   const [plantillas, setPlantillas] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [subiendo, setSubiendo] = useState(false);
@@ -105,9 +108,9 @@ export default function PlantillasPage() {
       <div className="flex justify-between items-end mb-10 border-b border-gray-800 pb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white mb-2 flex items-center gap-3">
-            <FileSignature style={{ color: colorPrimario }} /> Documentación Legal
+            <FileSignature style={{ color: colorPrimario }} /> Documentacion Legal
           </h1>
-          <p className="text-gray-400">Administra los Pagarés y Mutuos base para las firmas digitales.</p>
+          <p className="text-gray-400">Administra los Pagares y Mutuos base para las firmas digitales.</p>
         </div>
         <button 
           onClick={() => setMostrarModal(true)}
@@ -132,14 +135,27 @@ export default function PlantillasPage() {
                   {plan.tipoLinea}
                 </span>
               </div>
-              <h3 className="text-lg font-bold text-white mb-1">{plan.nombre}</h3>
-              <p className="text-xs text-gray-500 mb-6">Subido: {plan.fechaCreacion ? new Date(plan.fechaCreacion.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
+              
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-white mb-1">{plan.nombre}</h3>
+                <p className="text-xs text-gray-500 mb-2">Subido: {plan.fechaCreacion ? new Date(plan.fechaCreacion.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
+                {plan.mapeoConfigurado ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-green-500 bg-green-950/30 px-2 py-1 rounded border border-green-900/50">
+                    <CheckCircle2 size={12} /> Coordenadas Mapeadas
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs text-yellow-500 bg-yellow-950/30 px-2 py-1 rounded border border-yellow-900/50">
+                    <ShieldAlert size={12} /> Requiere Mapeo
+                  </span>
+                )}
+              </div>
               
               <div className="mt-auto flex gap-2">
                 <button 
+                  onClick={() => router.push(`/dashboard/plantillas/${plan.id}`)}
                   className="flex-1 bg-[#111] hover:bg-gray-800 border border-gray-800 text-white text-sm py-2 rounded-lg flex justify-center items-center gap-2 transition-colors"
                 >
-                  <LayoutTemplate size={16} /> Mapear Campos
+                  <LayoutTemplate size={16} /> {plan.mapeoConfigurado ? "Editar Mapeo" : "Configurar Mapeo"}
                 </button>
                 <button 
                   onClick={() => eliminarPlantilla(plan.id, plan.storagePath)}
@@ -156,7 +172,7 @@ export default function PlantillasPage() {
             <div className="col-span-full py-16 text-center border border-dashed border-gray-800 rounded-xl bg-[#0A0A0A]">
               <UploadCloud size={48} className="mx-auto text-gray-600 mb-4" />
               <h3 className="text-lg font-bold text-white mb-1">Sin plantillas configuradas</h3>
-              <p className="text-sm text-gray-500 max-w-md mx-auto">Sube un documento PDF en blanco. Luego podrás indicarle al sistema en qué coordenadas exactas debe imprimir el DNI y la firma del cliente.</p>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">Sube un documento PDF en blanco. Luego podras indicarle al sistema en que coordenadas exactas debe imprimir el DNI y la firma del cliente.</p>
             </div>
           )}
         </div>
@@ -171,22 +187,12 @@ export default function PlantillasPage() {
             <form onSubmit={handleSubirPlantilla} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Nombre Comercial (Ej: Mutuo Adelantos)</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={nombreDocumento} 
-                  onChange={(e)=>setNombreDocumento(e.target.value)} 
-                  className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:border-gray-500 focus:outline-none transition-colors" 
-                />
+                <input type="text" required value={nombreDocumento} onChange={(e)=>setNombreDocumento(e.target.value)} className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:border-gray-500 focus:outline-none transition-colors" />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Linea de Credito Asociada</label>
-                <select 
-                  value={tipoLinea} 
-                  onChange={(e)=>setTipoLinea(e.target.value)} 
-                  className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:border-gray-500 focus:outline-none transition-colors"
-                >
+                <select value={tipoLinea} onChange={(e)=>setTipoLinea(e.target.value)} className="w-full bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-sm text-white focus:border-gray-500 focus:outline-none transition-colors">
                   <option value="TODAS">Aplica para todas las lineas</option>
                   <option value="ADELANTO">Solo Adelantos</option>
                   <option value="CUAD">Solo CUAD (Gobierno)</option>
@@ -197,13 +203,7 @@ export default function PlantillasPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Archivo PDF</label>
                 <div className="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center hover:border-gray-500 transition-colors bg-[#111]">
-                  <input 
-                    type="file" 
-                    accept="application/pdf" 
-                    required 
-                    onChange={(e)=>setArchivo(e.target.files ? e.target.files[0] : null)}
-                    className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-white hover:file:bg-gray-700"
-                  />
+                  <input type="file" accept="application/pdf" required onChange={(e)=>setArchivo(e.target.files ? e.target.files[0] : null)} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-white hover:file:bg-gray-700" />
                 </div>
               </div>
               
