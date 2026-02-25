@@ -5,9 +5,18 @@ import { Search, Gavel, Landmark, CheckCircle, Briefcase, Loader2, AlertCircle }
 export default function BuscadorScoringReal() {
   const [dni, setDni] = useState("");
   const [sexo, setSexo] = useState("M");
-  const [resultado, setResultado] = useState<any>(null);
+  
+  // Estados separados para cada tarjeta
+  const [bcraData, setBcraData] = useState<any>(null);
+  const [juiciosData, setJuiciosData] = useState<any>(null);
+  const [cupoData, setCupoData] = useState<any>(null);
+  
+  // Estados de carga
   const [loading, setLoading] = useState(false);
-  const [botStatus, setBotStatus] = useState<"idle" | "procesando" | "completado" | "error" | "no_empleado">("idle");
+  const [statusBot, setStatusBot] = useState<"idle" | "procesando" | "completado" | "error" | "no_empleado">("idle");
+  const [statusJuicios, setStatusJuicios] = useState<"idle" | "procesando" | "completado" | "error">("idle");
+
+  const urlBot = "https://simply-bot-mendoza-97321115506.us-central1.run.app";
 
   const consultarTodo = async () => {
     if (!dni || dni.length < 7) {
@@ -16,49 +25,58 @@ export default function BuscadorScoringReal() {
     }
     
     setLoading(true);
-    setBotStatus("procesando");
-    setResultado(null);
+    setStatusBot("procesando");
+    setStatusJuicios("procesando");
+    setBcraData(null);
+    setJuiciosData(null);
+    setCupoData(null);
 
-    try {
-      // 1. Consultamos BCRA y Juicios (API interna de Vercel)
-      const resScoring = await fetch('/api/scoring', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dni, sexo })
-      });
-      const dataScoring = await resScoring.json();
-      setResultado(dataScoring);
+    // 1. CONSULTA BCRA (Vía API Next.js)
+    fetch('/api/scoring', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dni, sexo })
+    })
+    .then(res => res.json())
+    .then(data => setBcraData(data.bcra))
+    .catch(err => console.error("Error BCRA:", err));
 
-      // 2. Consultamos al Bot en Google Cloud (Cupo Mendoza)
-      const resBot = await fetch('https://simply-bot-mendoza-97321115506.us-central1.run.app/api/simular-cupo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          dni, 
-          usuario: "Amarque", 
-          password: "uni66",
-          min: 1000, 
-          max: 500000 
-        })
-      });
-      
-      const dataBot = await resBot.json();
-      
-      if (dataBot.noRegistra) {
-        setBotStatus("no_empleado");
-      } else if (dataBot.success) {
-        setResultado((prev: any) => ({ ...prev, cupoReal: dataBot.cupoMaximo }));
-        setBotStatus("completado");
+    // 2. CONSULTA JUICIOS (Vía Bot Cloud Run)
+    fetch(`${urlBot}/api/consultar-juicios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dni })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        setJuiciosData(data.judicial);
+        setStatusJuicios("completado");
       } else {
-        setBotStatus("error");
+        setStatusJuicios("error");
       }
+    })
+    .catch(() => setStatusJuicios("error"));
 
-    } catch (e) {
-      console.error("Error en la consulta:", e);
-      setBotStatus("error");
-    } finally {
-      setLoading(false);
-    }
+    // 3. CONSULTA CUPO MENDOZA (Vía Bot Cloud Run)
+    fetch(`${urlBot}/api/simular-cupo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dni, usuario: "Amarque", password: "uni66" })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.noRegistra) {
+        setStatusBot("no_empleado");
+      } else if (data.success) {
+        setCupoData(data.cupoMaximo);
+        setStatusBot("completado");
+      } else {
+        setStatusBot("error");
+      }
+    })
+    .catch(() => setStatusBot("error"))
+    .finally(() => setLoading(false));
   };
 
   return (
@@ -88,7 +106,7 @@ export default function BuscadorScoringReal() {
         </button>
       </div>
 
-      {resultado && (
+      {(bcraData || statusBot !== "idle" || statusJuicios !== "idle") && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
           
           {/* TARJETA CUPO MENDOZA */}
@@ -97,35 +115,21 @@ export default function BuscadorScoringReal() {
               <Briefcase size={14}/> Cupo Mendoza
             </h3>
             
-            {botStatus === "procesando" && (
+            {statusBot === "procesando" && (
               <div className="flex flex-col gap-2">
                 <p className="text-blue-500 font-bold animate-pulse text-sm">Calculando cupo real...</p>
-                <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden">
-                  <div className="bg-blue-500 h-full animate-progress-indefinite"></div>
-                </div>
               </div>
             )}
-
-            {botStatus === "no_empleado" && (
-              <p className="text-orange-500 font-bold text-sm italic">No registra legajo público</p>
-            )}
-
-            {botStatus === "completado" && resultado.cupoReal !== undefined && (
+            {statusBot === "no_empleado" && <p className="text-orange-500 font-bold text-sm italic">No registra legajo</p>}
+            {statusBot === "completado" && cupoData !== null && (
               <div>
-                <p className="text-4xl font-black text-white font-mono">
-                  ${resultado.cupoReal.toLocaleString('es-AR')}
-                </p>
+                <p className="text-4xl font-black text-white font-mono">${cupoData.toLocaleString('es-AR')}</p>
                 <p className="text-green-500 text-[10px] font-black mt-2 uppercase flex items-center gap-1">
                   <CheckCircle size={12}/> Verificado sin afectación
                 </p>
               </div>
             )}
-
-            {botStatus === "error" && (
-              <p className="text-red-500 text-sm flex items-center gap-2">
-                <AlertCircle size={14}/> Error en el motor de cupo
-              </p>
-            )}
+            {statusBot === "error" && <p className="text-red-500 text-sm">Error en el motor de cupo</p>}
           </div>
 
           {/* TARJETA BCRA */}
@@ -133,8 +137,10 @@ export default function BuscadorScoringReal() {
             <h3 className="text-gray-500 font-black uppercase text-[10px] tracking-widest mb-4 flex items-center gap-2">
               <Landmark size={14}/> Situación BCRA
             </h3>
-            {resultado.bcra?.tieneDeudas ? (
-              <p className="text-2xl font-black text-white uppercase">SITUACIÓN {resultado.bcra.peorSituacion}</p>
+            {!bcraData ? (
+              <p className="text-blue-500 font-bold animate-pulse text-sm">Consultando Central...</p>
+            ) : bcraData.tieneDeudas ? (
+              <p className="text-2xl font-black text-white uppercase">SITUACIÓN {bcraData.peorSituacion}</p>
             ) : (
               <p className="text-green-500 font-bold italic">SITUACIÓN 1 - LIMPIO</p>
             )}
@@ -145,10 +151,14 @@ export default function BuscadorScoringReal() {
             <h3 className="text-gray-500 font-black uppercase text-[10px] tracking-widest mb-4 flex items-center gap-2">
               <Gavel size={14}/> Concursos / Quiebras
             </h3>
-            {resultado.judicial?.tieneRegistros ? (
-              <p className="text-red-500 font-black italic uppercase">Registros Detectados</p>
-            ) : (
-              <p className="text-green-500 font-bold italic uppercase">Sin Registros</p>
+            {statusJuicios === "procesando" && <p className="text-blue-500 font-bold animate-pulse text-sm">Buscando expedientes...</p>}
+            {statusJuicios === "error" && <p className="text-red-500 text-sm">Error al conectar con Jus Mendoza</p>}
+            {statusJuicios === "completado" && juiciosData && (
+              juiciosData.tieneRegistros ? (
+                <p className="text-red-500 font-black italic uppercase">Registros Detectados</p>
+              ) : (
+                <p className="text-green-500 font-bold italic uppercase">Sin Registros</p>
+              )
             )}
           </div>
 
