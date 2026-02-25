@@ -4,7 +4,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { FileText, ChevronRight, Landmark, Search } from "lucide-react";
+import { FileText, ChevronRight, Landmark, Search, ShieldCheck } from "lucide-react";
 
 export default function CarteraPage() {
   const { entidadData } = useAuth();
@@ -23,31 +23,45 @@ export default function CarteraPage() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <h1 className="text-3xl font-black text-white mb-8">Cartera Activa</h1>
+      <div className="flex justify-between items-end mb-8">
+        <div>
+           <h1 className="text-3xl font-black text-white italic">Cartera Activa</h1>
+           <p className="text-gray-500 text-sm">Control de legajos y estados de liquidación.</p>
+        </div>
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-2 flex items-center gap-2">
+           <Search size={16} className="text-gray-500" />
+           <input placeholder="Buscar por DNI..." className="bg-transparent text-sm outline-none text-white" />
+        </div>
+      </div>
+
       <div className="bg-[#0A0A0A] border border-gray-800 rounded-[32px] overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-gray-900/50 border-b border-gray-800">
             <tr>
-              <th className="p-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Cliente</th>
-              <th className="p-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Monto</th>
-              <th className="p-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado</th>
-              <th className="p-5"></th>
+              <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Solicitante</th>
+              <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Capital</th>
+              <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">BCRA</th>
+              <th className="p-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado</th>
+              <th className="p-6"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-900">
             {ops.map((op: any) => (
-              <tr key={op.id} className="border-b border-gray-900 hover:bg-white/[0.02] cursor-pointer" onClick={() => router.push(`/dashboard/operaciones/${op.id}`)}>
-                <td className="p-5">
-                  <p className="font-bold text-white">{op.cliente?.nombre || "N/A"}</p>
-                  <p className="text-xs text-gray-500">{op.cliente?.dni || "S/D"}</p>
+              <tr key={op.id} className="hover:bg-white/[0.02] cursor-pointer transition-colors" onClick={() => router.push(`/dashboard/operaciones/${op.id}`)}>
+                <td className="p-6">
+                  <p className="font-bold text-white">{op.cliente?.nombre || "Legajo Pendiente"}</p>
+                  <p className="text-xs text-gray-500 font-mono">{op.cliente?.dni || "S/D"}</p>
                 </td>
-                <td className="p-5 font-bold text-white">${op.financiero?.montoSolicitado?.toLocaleString('es-AR')}</td>
-                <td className="p-5">
-                  <span className="px-3 py-1 bg-green-500/10 text-green-500 rounded-full text-[10px] font-black uppercase">
+                <td className="p-6 font-bold text-white">${op.financiero?.montoSolicitado?.toLocaleString('es-AR')}</td>
+                <td className="p-6">
+                  <span className={`font-bold ${op.cliente?.scoreBcra > 2 ? 'text-red-500' : 'text-green-500'}`}>Cat. {op.cliente?.scoreBcra || 1}</span>
+                </td>
+                <td className="p-6">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${op.estado === 'LIQUIDADO' ? 'bg-green-500/10 text-green-500' : 'bg-amber-500/10 text-amber-500'}`}>
                     {op.estado}
                   </span>
                 </td>
-                <td className="p-5 text-right"><ChevronRight className="text-gray-700" /></td>
+                <td className="p-6 text-right"><ChevronRight className="text-gray-700" /></td>
               </tr>
             ))}
           </tbody>
