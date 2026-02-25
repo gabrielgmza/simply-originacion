@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     await Promise.all(snap.docs.map(linkDoc => 
       updateDoc(doc(db, "magic_links", linkDoc.id), { 
         usado: true, 
-        notas: "Invalidado por re-generación",
+        notas: "Invalidado por re-generacion",
         fechaInvalidacion: serverTimestamp()
       })
     ));
