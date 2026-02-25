@@ -1,114 +1,180 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
-import { Layers as LayersIcon, MoreHorizontal, ArrowUpRight, Zap, Search, Filter, Download } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
+import { Search, Download, Eye, Loader2, Building2, Clock, CheckCircle, AlertTriangle, FileText } from "lucide-react";
 
 export default function OperacionesPage() {
-  const [ops, setOps] = useState<any[]>([]);
-  const [filteredOps, setFilteredOps] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const { userData, entidadData } = useAuth();
+  const [operaciones, setOperaciones] = useState<any[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [busqueda, setBusqueda] = useState("");
 
   useEffect(() => {
-    fetchOps();
-  }, []);
+    const cargarOperaciones = async () => {
+      if (!userData?.entidadId) return;
+      setCargando(true);
+      try {
+        const q = query(collection(db, "operaciones"), where("entidadId", "==", userData.entidadId));
+        const querySnapshot = await getDocs(q);
+        
+        let data: any[] = [];
+        querySnapshot.forEach((doc) => {
+          data.push({ id: doc.id, ...doc.data() });
+        });
 
-  // Lógica de filtrado en tiempo real
-  useEffect(() => {
-    const results = ops.filter(op => 
-      op.clienteNombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      op.clienteDni?.includes(searchTerm)
-    );
-    setFilteredOps(results);
-  }, [searchTerm, ops]);
+        if (userData.rol === "VENDEDOR") {
+          data = data.filter(op => op.vendedorId === userData.uid);
+        }
 
-  const fetchOps = async () => {
-    try {
-      const q = query(collection(db, 'operaciones'), orderBy('fechaCreacion', 'desc'));
-      const snap = await getDocs(q);
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOps(data);
-      setFilteredOps(data);
-    } catch (error) {
-      console.error("Error al cargar operaciones:", error);
-    } finally { 
-      setLoading(false); 
+        data.sort((a, b) => {
+          const timeA = a.fechaCreacion?.seconds || 0;
+          const timeB = b.fechaCreacion?.seconds || 0;
+          return timeB - timeA;
+        });
+
+        setOperaciones(data);
+      } catch (error) {
+        console.error("Error al cargar operaciones:", error);
+      } finally {
+        setCargando(false);
+      }
+    };
+
+    cargarOperaciones();
+  }, [userData]);
+
+  const operacionesFiltradas = operaciones.filter(op => 
+    op.cliente.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    op.cliente.dni.includes(busqueda)
+  );
+
+  const exportarCSV = () => {
+    if (operacionesFiltradas.length === 0) return;
+    
+    const cabeceras = ["Fecha", "Cliente", "DNI/CUIL", "Tipo Credito", "Monto", "Cuotas", "Estado"];
+    const filas = operacionesFiltradas.map(op => [
+      new Date(op.fechaCreacion?.seconds * 1000).toLocaleDateString('es-AR'),
+      op.cliente.nombre,
+      op.cliente.cuil || op.cliente.dni,
+      op.tipo,
+      op.financiero.montoSolicitado,
+      op.financiero.cuotas,
+      op.estado
+    ]);
+    
+    const contenidoCSV = [cabeceras.join(","), ...filas.map(f => f.join(","))].join("\n");
+    const blob = new Blob([contenidoCSV], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `operaciones_${entidadData?.nombreFantasia || 'entidad'}_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const formatearMoneda = (monto: number) => {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(monto);
+  };
+
+  const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
+
+  const renderEstado = (estado: string) => {
+    switch(estado) {
+      case "PENDIENTE_DOCS": return <span className="flex items-center gap-1 px-2.5 py-1 bg-yellow-950/30 text-yellow-500 border border-yellow-900/50 rounded-full text-xs font-medium"><Clock size={12}/> Pendiente Docs</span>;
+      case "EN_REVISION": return <span className="flex items-center gap-1 px-2.5 py-1 bg-blue-950/30 text-blue-500 border border-blue-900/50 rounded-full text-xs font-medium"><Eye size={12}/> En Revision</span>;
+      case "LIQUIDADO": return <span className="flex items-center gap-1 px-2.5 py-1 bg-green-950/30 text-green-500 border border-green-900/50 rounded-full text-xs font-medium"><CheckCircle size={12}/> Liquidado</span>;
+      case "RECHAZADO": return <span className="flex items-center gap-1 px-2.5 py-1 bg-red-950/30 text-red-500 border border-red-900/50 rounded-full text-xs font-medium"><AlertTriangle size={12}/> Rechazado</span>;
+      default: return <span className="px-2.5 py-1 bg-gray-800 text-gray-400 rounded-full text-xs font-medium">{estado}</span>;
     }
   };
 
+  if (cargando) return <div className="p-8 flex justify-center mt-20"><Loader2 className="animate-spin text-gray-500" size={40} /></div>;
+
   return (
-    <div className="space-y-10 animate-in fade-in duration-700 italic font-bold">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b dark:border-white/5 pb-8">
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2 text-[#FF5E14] text-[10px] tracking-[0.5em] uppercase leading-none">
-            <LayersIcon className="w-4 h-4 fill-current" /> <span>Core Ledger</span>
-          </div>
-          <h1 className="text-4xl font-black tracking-tighter italic uppercase text-slate-950 dark:text-white leading-none">Registro Activos</h1>
+    <div className="p-8 max-w-7xl mx-auto animate-fade-in">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-gray-800 pb-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+            <Building2 style={{ color: colorPrimario }} /> Cartera de Activos
+          </h1>
+          <p className="text-gray-400">Registro maestro de operaciones generadas.</p>
         </div>
-        
-        <div className="flex items-center space-x-4">
-           <div className="flex items-center bg-white dark:bg-[#111111] border border-slate-200 dark:border-white/5 px-5 py-3 rounded-2xl shadow-sm text-[12px] w-80 group focus-within:border-orange-500/50 transition-all">
-              <Search className="w-4 h-4 text-slate-400 mr-3 group-focus-within:text-[#FF5E14]" />
-              <input 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="BUSCAR POR NOMBRE O DNI..." 
-                className="bg-transparent border-none outline-none w-full text-slate-900 dark:text-white font-bold uppercase tracking-tight" 
-              />
-           </div>
-           <button className="bg-slate-950 dark:bg-white text-white dark:text-slate-950 p-4 rounded-2xl shadow-lg hover:scale-110 transition-all shadow-orange-600/5"><Download className="w-5 h-5" /></button>
+        <div className="flex gap-3 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={16} className="text-gray-500" />
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar DNI o Nombre..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="w-full bg-[#111] border border-gray-700 text-white rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-gray-500 transition-colors"
+            />
+          </div>
+          <button 
+            onClick={exportarCSV}
+            className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-gray-800"
+          >
+            <Download size={16} /> Exportar
+          </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-[#111111] rounded-[3rem] border border-slate-100 dark:border-white/5 shadow-xl overflow-hidden font-black italic uppercase leading-none">
+      <div className="bg-[#0A0A0A] border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[11px]">
-            <thead className="bg-slate-50 dark:bg-white/[0.01] border-b dark:border-white/5 text-slate-400 font-black italic uppercase tracking-widest">
-              <tr>
-                <th className="px-8 py-6">Identidad Cliente</th>
-                <th className="px-8 py-6">Monto Capital</th>
-                <th className="px-8 py-6 text-center">Estado Core</th>
-                <th className="px-8 py-6 text-center">Gestión</th>
+          <table className="w-full text-left border-collapse whitespace-nowrap">
+            <thead>
+              <tr className="bg-[#111] border-b border-gray-800">
+                <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+                <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Titular</th>
+                <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Linea / Tipo</th>
+                <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-right">Monto Solicitado</th>
+                <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Estado</th>
+                <th className="p-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">Docs</th>
               </tr>
             </thead>
-            <tbody className="divide-y dark:divide-white/5 font-black italic">
-              {filteredOps.map(op => (
-                <tr key={op.id} className="group hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors leading-none">
-                  <td className="px-8 py-6">
-                    <div className="flex items-center space-x-4">
-                       <div className="w-10 h-10 bg-[#FF5E14] rounded-xl flex items-center justify-center text-white text-xs font-black italic shadow-lg shadow-orange-600/20 group-hover:rotate-6 transition-transform">{op.clienteNombre?.charAt(0)}</div>
-                       <div>
-                         <p className="text-[13px] font-black italic leading-none mb-1.5 text-slate-900 dark:text-white">{op.clienteNombre}</p>
-                         <p className="text-[9px] text-slate-400 tracking-widest leading-none font-bold">DNI {op.clienteDni}</p>
-                       </div>
-                    </div>
+            <tbody className="divide-y divide-gray-800">
+              {operacionesFiltradas.map((op) => (
+                <tr key={op.id} className="hover:bg-gray-900/50 transition-colors group">
+                  <td className="p-4 text-sm text-gray-300">
+                    {op.fechaCreacion ? new Date(op.fechaCreacion.seconds * 1000).toLocaleDateString('es-AR') : 'N/A'}
                   </td>
-                  <td className="px-8 py-6 font-black text-slate-900 dark:text-white">
-                    <p className="text-lg tracking-tighter leading-none mb-1.5">${op.monto?.toLocaleString()}</p>
-                    <div className="flex items-center text-[9px] tracking-widest text-[#FF5E14] opacity-80 uppercase italic">
-                      <Zap className="w-3 h-3 mr-1.5 fill-current" /> {op.cuotas} Meses • {op.sistema || 'FRANCES'}
-                    </div>
+                  <td className="p-4">
+                    <p className="font-bold text-white text-sm">{op.cliente.nombre}</p>
+                    <p className="text-xs text-gray-500">CUIL: {op.cliente.cuil || op.cliente.dni}</p>
                   </td>
-                  <td className="px-8 py-6 text-center">
-                    <span className="bg-orange-600/10 text-[#FF5E14] px-4 py-2 rounded-xl text-[9px] font-black tracking-widest border border-orange-600/20 italic shadow-sm uppercase">{op.estado}</span>
+                  <td className="p-4">
+                    <span className="text-xs font-medium text-gray-300 bg-gray-800 px-2 py-1 rounded">
+                      {op.tipo}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">{op.financiero.cuotas} Cuotas</p>
                   </td>
-                  <td className="px-8 py-6 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                       <button className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl hover:bg-[#FF5E14] hover:text-white transition-all transform group-hover:scale-110 shadow-sm text-slate-400"><ArrowUpRight className="w-4 h-4" /></button>
-                       <button className="p-3 text-slate-400 hover:text-slate-950 dark:hover:text-white transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
-                    </div>
+                  <td className="p-4 text-right">
+                    <p className="font-bold text-white text-sm">{formatearMoneda(op.financiero.montoSolicitado)}</p>
+                  </td>
+                  <td className="p-4">
+                    {renderEstado(op.estado)}
+                  </td>
+                  <td className="p-4 text-center">
+                    <button className="text-gray-500 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-800 inline-flex" title="Ver Legajo">
+                      <FileText size={18} />
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {filteredOps.length === 0 && !loading && (
-          <div className="py-24 text-center space-y-4">
-             <Search className="w-12 h-12 text-slate-200 dark:text-white/5 mx-auto opacity-20" />
-             <p className="text-xs text-slate-400 font-bold tracking-[0.5em] uppercase italic">Sin resultados para la búsqueda</p>
+        {operacionesFiltradas.length === 0 && (
+          <div className="p-16 text-center text-gray-500 flex flex-col items-center">
+            <FileText size={48} className="mb-4 text-gray-700" />
+            <p className="text-lg font-medium">No se encontraron operaciones.</p>
+            <p className="text-sm mt-1">Genera un nuevo legajo desde el Originador.</p>
           </div>
         )}
       </div>
