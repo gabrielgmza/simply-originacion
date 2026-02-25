@@ -3,11 +3,11 @@ import { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { TrendingUp, Users, AlertCircle, Landmark } from "lucide-react";
+import { TrendingUp, Users, AlertCircle, Landmark, ArrowUpRight } from "lucide-react";
 
 export default function GerenciaPage() {
   const { entidadData } = useAuth();
-  const [stats, setStats] = useState({ capital: 0, ops: 0, mora: 0 });
+  const [stats, setStats] = useState({ capital: 0, ops: 0, mora: 0, proyectado: 0 });
 
   useEffect(() => {
     const load = async () => {
@@ -16,10 +16,14 @@ export default function GerenciaPage() {
       const snap = await getDocs(q);
       let cap = 0;
       snap.docs.forEach(d => {
-        const val = d.data().financiero?.montoSolicitado || 0;
-        cap += val;
+        const data = d.data();
+        if (data.estado === 'LIQUIDADO') {
+           cap += (data.financiero?.montoSolicitado || 0);
+        }
       });
-      setStats({ capital: cap, ops: snap.size, mora: 0 });
+      // Cálculo de retorno proyectado (simulado con TNA 145%)
+      const retorno = cap * 1.45;
+      setStats({ capital: cap, ops: snap.size, mora: 0, proyectado: retorno });
     };
     load();
   }, [entidadData]);
@@ -27,11 +31,16 @@ export default function GerenciaPage() {
   return (
     <div className="animate-in fade-in duration-500">
       <h1 className="text-3xl font-black text-white mb-2 tracking-tighter">Centro de Gerencia</h1>
-      <p className="text-gray-500 mb-10 text-sm italic">Sincronizado con {entidadData?.nombre}.</p>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-[#0A0A0A] border border-gray-800 p-6 rounded-3xl border-l-green-600 border-l-4">
+      <p className="text-gray-500 mb-10 text-sm italic">Resumen operativo de {entidadData?.nombre}.</p>
+      
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+        <div className="bg-[#0A0A0A] border border-gray-800 p-6 rounded-3xl border-l-4 border-l-green-600">
           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Capital Colocado</p>
           <p className="text-3xl font-black text-white mt-2">${stats.capital.toLocaleString('es-AR')}</p>
+        </div>
+        <div className="bg-[#0A0A0A] border border-gray-800 p-6 rounded-3xl">
+          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Retorno Est. (TNA)</p>
+          <p className="text-3xl font-black text-blue-500 mt-2">${stats.proyectado.toLocaleString('es-AR')}</p>
         </div>
         <div className="bg-[#0A0A0A] border border-gray-800 p-6 rounded-3xl">
           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Operaciones</p>
@@ -39,12 +48,18 @@ export default function GerenciaPage() {
         </div>
         <div className="bg-[#0A0A0A] border border-gray-800 p-6 rounded-3xl">
           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Alertas Mora</p>
-          <p className="text-3xl font-black text-red-500 mt-2">0</p>
+          <p className="text-3xl font-black text-red-500 mt-2">{stats.mora}</p>
         </div>
-        <div className="bg-[#0A0A0A] border border-gray-800 p-6 rounded-3xl">
-          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Equipo Activo</p>
-          <p className="text-3xl font-black text-white mt-2">2</p>
+      </div>
+
+      <div className="bg-[#0A0A0A] border border-gray-800 p-8 rounded-[48px] flex items-center justify-between">
+        <div>
+          <h3 className="text-white font-bold text-lg mb-1">Reporte de Producción Mensual</h3>
+          <p className="text-gray-500 text-sm">Exporta el listado completo para conciliación bancaria.</p>
         </div>
+        <button className="bg-white text-black px-8 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-gray-200 transition-all">
+          <ArrowUpRight size={18}/> Descargar Excel
+        </button>
       </div>
     </div>
   );
