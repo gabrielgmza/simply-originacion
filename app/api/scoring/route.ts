@@ -13,17 +13,24 @@ export async function POST(req: Request) {
     let bcraData = null;
     
     // ==========================================
-    // 1. SCRAPING: JUS MENDOZA (Con Extracción de Link)
+    // 1. SCRAPING: JUS MENDOZA (Apuntando a resultados2.php)
     // ==========================================
     try {
       const formParams = new URLSearchParams();
+      // Enviamos el DNI en todos los formatos posibles que suele usar PHP
       formParams.append('nro_doc', dni); 
+      formParams.append('documento', dni);
+      formParams.append('criterio', dni);
+      formParams.append('busqueda', dni);
+      formParams.append('buscar', 'Buscar');
 
-      const mendozaRes = await fetch('https://www2.jus.mendoza.gov.ar/registros/rju/index.php', {
+      // Le pegamos directo al procesador de resultados
+      const mendozaRes = await fetch('https://www2.jus.mendoza.gov.ar/registros/rju/resultados2.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://www2.jus.mendoza.gov.ar/registros/rju/index.php'
         },
         body: formParams.toString(),
       });
@@ -31,26 +38,28 @@ export async function POST(req: Request) {
       const html = await mendozaRes.text();
       const $ = cheerio.load(html);
 
+      // Buscamos las filas de la tabla
       $('table tr').each((i, row) => {
         if (i === 0) return; // Saltar encabezados
         
         const cols = $(row).find('td');
-        if (cols.length >= 4) {
-          const caratula = $(cols[1]).text().trim().toUpperCase();
-          const tipoProceso = $(cols[2]).text().trim().toUpperCase();
+        if (cols.length >= 6) { // La tabla real tiene 6 columnas
+          const expediente = $(cols[0]).text().trim();
+          const caratula = $(cols[1]).text().trim().toUpperCase(); // Nombre/Razón Social
+          const tipoProceso = $(cols[2]).text().trim().toUpperCase(); // Tipo
+          const tribunal = $(cols[3]).text().trim().toUpperCase(); // Tribunal
+          const fechaInicio = $(cols[4]).text().trim(); // Fecha Inicio
           
-          // VERIFICACIÓN DOBLE: DNI (enviado en el form) + Apellido (en la carátula)
+          // VERIFICACIÓN DOBLE: Si el Apellido está en la carátula o en los Datos Personales
           if (caratula.includes(apellido.toUpperCase())) {
             judicialData.tieneRegistros = true;
             
-            // EXTRACCIÓN DEL LINK DEL DOCUMENTO
+            // EXTRACCIÓN DEL LINK
             let linkDocumento = null;
-            const aTag = $(row).find('a').first(); // Buscamos la etiqueta <a> en la fila
-            
+            const aTag = $(row).find('a').first();
             if (aTag.length > 0) {
               const href = aTag.attr('href');
               if (href) {
-                // Si el link es relativo (ej: controlador.php?...), lo hacemos absoluto
                 linkDocumento = href.startsWith('http') 
                   ? href 
                   : `https://www2.jus.mendoza.gov.ar/registros/rju/${href}`;
@@ -58,15 +67,20 @@ export async function POST(req: Request) {
             }
 
             judicialData.procesos.push({
-              expediente: $(cols[0]).text().trim(),
+              expediente: expediente,
               caratula: caratula,
               tipo: tipoProceso,
-              fechaInicio: $(cols[3]).text().trim(),
-              linkDocumento: linkDocumento // Guardamos el link extraído
+              tribunal: tribunal,
+              fechaInicio: fechaInicio,
+              linkDocumento: linkDocumento
             });
           }
         }
       });
+      
+      // LOG PARA VERCEL: Para saber qué nos devuelve realmente si vuelve a fallar
+      console.log(`[SCRAPING] DNI: ${dni} | Registros Encontrados: ${judicialData.tieneRegistros}`);
+
     } catch (error) {
       console.error("Error JUS Mendoza:", error);
     }
