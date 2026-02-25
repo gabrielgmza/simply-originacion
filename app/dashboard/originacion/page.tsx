@@ -6,7 +6,7 @@ import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { Save, Eraser, CheckCircle2, Loader2, User, CreditCard, PenTool, Search, ShieldCheck, Link as LinkIcon, Copy } from "lucide-react";
+import { Save, Eraser, CheckCircle2, Loader2, User, CreditCard, PenTool, Search, ShieldCheck, Link as LinkIcon, Copy, Lock, FileCheck } from "lucide-react";
 
 export default function OriginacionPage() {
   const { userData, entidadData } = useAuth();
@@ -27,6 +27,11 @@ export default function OriginacionPage() {
   const [cuotas, setCuotas] = useState("12");
   const [tipoCredito, setTipoCredito] = useState("ADELANTO");
   
+  const [cupoDisponible, setCupoDisponible] = useState<number | null>(null);
+  const [consultandoCupo, setConsultandoCupo] = useState(false);
+  const [cupoTomado, setCupoTomado] = useState(false);
+  const [bloqueandoCupo, setBloqueandoCupo] = useState(false);
+  
   const [linkGenerado, setLinkGenerado] = useState("");
   const [copiado, setCopiado] = useState(false);
 
@@ -43,6 +48,12 @@ export default function OriginacionPage() {
       }
     }
   }, [paso]);
+
+  useEffect(() => {
+    setCupoDisponible(null);
+    setCupoTomado(false);
+    setErrorValidacion("");
+  }, [tipoCredito]);
 
   const calcularCuil = (dniStr: string, gen: string) => {
     if (!dniStr || dniStr.length < 7 || dniStr.length > 8) return "";
@@ -78,29 +89,59 @@ export default function OriginacionPage() {
     }, 1500);
   };
 
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    setIsDrawing(true);
-    draw(e);
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      if (ctx) ctx.beginPath();
+  const consultarCupoCuad = async () => {
+    setConsultandoCupo(true);
+    setErrorValidacion("");
+    try {
+      const res = await fetch("/api/cuad/consultar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dni, entidadId: entidadData?.id })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || "Error al consultar cupo en Mendoza.");
+      
+      if (data.estado === "APTO") {
+        setCupoDisponible(data.cupoDisponible);
+        setMonto(data.cupoDisponible.toString());
+        setMensaje(`Lectura exitosa. El cliente posee un margen de $${data.cupoDisponible}`);
+        setTimeout(() => setMensaje(""), 4000);
+      } else {
+        setErrorValidacion("El cliente NO posee margen de descuento disponible.");
+      }
+    } catch (error: any) {
+      setErrorValidacion(error.message);
+    } finally {
+      setConsultandoCupo(false);
     }
   };
 
+  const bloquearCupo = () => {
+    if (Number(monto) > (cupoDisponible || 0)) {
+      setErrorValidacion("El monto solicitado supera el cupo oficial disponible.");
+      return;
+    }
+    setErrorValidacion("");
+    setBloqueandoCupo(true);
+    
+    setTimeout(() => {
+      setCupoTomado(true);
+      setBloqueandoCupo(false);
+      setMensaje(`¡Éxito! Se han bloqueado $${monto} en el sistema del gobierno y se descargó el CAD.`);
+    }, 2500);
+  };
+
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => { setIsDrawing(true); draw(e); };
+  const stopDrawing = () => { setIsDrawing(false); if (canvasRef.current) canvasRef.current.getContext("2d")?.beginPath(); };
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
     const rect = canvas.getBoundingClientRect();
     const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
-
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
     ctx.strokeStyle = entidadData?.configuracion?.colorPrimario || "#FF5E14";
@@ -114,10 +155,7 @@ export default function OriginacionPage() {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.fillStyle = "#F8F9FA";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    if (ctx) { ctx.fillStyle = "#F8F9FA"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
   };
 
   const generarOperacionBase = async (esRemoto: boolean) => {
@@ -135,15 +173,14 @@ export default function OriginacionPage() {
         cft: entidadData.configuracion?.tasaInteresBase || 0,
         fechaVencimiento: serverTimestamp()
       },
-      legajo: { firmaUrl: "" },
-      seguridad: {
-        userAgent: navigator.userAgent,
-        hashOperacion: "GENERADO_EN_BACKEND"
+      legajo: { 
+        firmaUrl: "",
+        cadUrl: tipoCredito === 'CUAD' && cupoTomado ? "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" : null
       },
+      seguridad: { userAgent: navigator.userAgent, hashOperacion: "GENERADO_EN_BACKEND" },
       fechaCreacion: serverTimestamp(),
       fechaActualizacion: serverTimestamp()
     });
-
     return operacionRef.id;
   };
 
@@ -151,7 +188,6 @@ export default function OriginacionPage() {
     if (!canvasRef.current) return;
     setLoading(true);
     setMensaje("Subiendo firma y registrando legajo...");
-
     try {
       const operacionId = await generarOperacionBase(false);
       const firmaBase64 = canvasRef.current.toDataURL("image/png");
@@ -160,49 +196,33 @@ export default function OriginacionPage() {
       await uploadString(storageRef, firmaBase64, "data_url");
       const firmaUrl = await getDownloadURL(storageRef);
 
-      await setDoc(doc(db, "operaciones", operacionId), {
-        legajo: { firmaUrl }
-      }, { merge: true });
-
+      await setDoc(doc(db, "operaciones", operacionId), { legajo: { firmaUrl } }, { merge: true });
       setMensaje("Operacion creada con firma presencial.");
       setTimeout(() => router.push("/dashboard/operaciones"), 2000);
     } catch (error) {
       console.error(error);
       setMensaje("Error al procesar la operacion.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const generarMagicLink = async () => {
     setLoading(true);
     setMensaje("Generando link seguro para el cliente...");
-
     try {
       const operacionId = await generarOperacionBase(true);
       const tokenUnico = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      
-      const expiracion = new Date();
-      expiracion.setHours(expiracion.getHours() + 24);
+      const expiracion = new Date(); expiracion.setHours(expiracion.getHours() + 24);
 
       await setDoc(doc(db, "magic_links", tokenUnico), {
-        token: tokenUnico,
-        operacionId: operacionId,
-        entidadId: entidadData?.id,
-        usado: false,
-        expiracion: expiracion,
-        fechaCreacion: serverTimestamp()
+        token: tokenUnico, operacionId: operacionId, entidadId: entidadData?.id,
+        usado: false, expiracion: expiracion, fechaCreacion: serverTimestamp()
       });
-
-      const urlDestino = `${window.location.origin}/onboarding/${tokenUnico}`;
-      setLinkGenerado(urlDestino);
+      setLinkGenerado(`${window.location.origin}/onboarding/${tokenUnico}`);
       setPaso(4);
     } catch (error) {
       console.error(error);
       setMensaje("Error al generar el link.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const copiarAlPortapapeles = () => {
@@ -212,6 +232,7 @@ export default function OriginacionPage() {
   };
 
   const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
+  const formatearMoneda = (val: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val);
 
   return (
     <div className="min-h-screen bg-[#050505] text-[#F8F9FA] p-6 lg:p-12 font-sans">
@@ -219,7 +240,7 @@ export default function OriginacionPage() {
         <div className="mb-10 border-b border-gray-800 pb-6 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Nuevo Legajo</h1>
-            <p className="text-gray-400 font-medium">Originador Multi-Tenant v2.5.0</p>
+            <p className="text-gray-400 font-medium">Originador Multi-Tenant v2.15.0</p>
           </div>
           <div className="text-right">
             <span className="text-xs bg-gray-900 text-gray-400 px-3 py-1 rounded-full border border-gray-800">Operador: {userData?.nombre}</span>
@@ -238,15 +259,12 @@ export default function OriginacionPage() {
               <div className="p-2 rounded-lg text-white" style={{ backgroundColor: colorPrimario }}><User size={24} /></div>
               <h2 className="text-xl font-bold">Paso 1: Identidad & Scoring</h2>
             </div>
-            
             {errorValidacion && <p className="text-red-500 text-sm mb-4">{errorValidacion}</p>}
-            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-400 mb-1">Genero (P/ CUIL)</label>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Genero</label>
                 <select value={genero} onChange={(e) => setGenero(e.target.value)} disabled={scoreBcra !== null} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors">
-                  <option value="M">Masculino</option>
-                  <option value="F">Femenino</option>
+                  <option value="M">Masculino</option><option value="F">Femenino</option>
                 </select>
               </div>
               <div className="md:col-span-2">
@@ -254,7 +272,6 @@ export default function OriginacionPage() {
                 <input type="number" value={dni} onChange={(e) => setDni(e.target.value)} disabled={scoreBcra !== null} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors" />
               </div>
             </div>
-            
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-400 mb-1">Nombre Completo</label>
               <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} disabled={scoreBcra !== null} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors" />
@@ -283,34 +300,76 @@ export default function OriginacionPage() {
               <h2 className="text-xl font-bold">Paso 2: Condiciones Comerciales</h2>
             </div>
             
+            {errorValidacion && <p className="text-red-500 text-sm mb-4 bg-red-950/30 p-3 rounded-lg border border-red-900/50">{errorValidacion}</p>}
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-400 mb-1">Linea de Credito</label>
-              <select value={tipoCredito} onChange={(e) => setTipoCredito(e.target.value)} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors">
+              <select value={tipoCredito} onChange={(e) => setTipoCredito(e.target.value)} disabled={cupoTomado} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors disabled:opacity-50">
                 {entidadData?.configuracion?.moduloAdelantos && <option value="ADELANTO">Adelanto (1 Pago)</option>}
                 {entidadData?.configuracion?.moduloCuad && <option value="CUAD">CUAD Mendoza</option>}
                 {entidadData?.configuracion?.moduloPrivados && <option value="PRIVADO">Privados</option>}
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Monto ($)</label>
-                <input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors" />
+            {tipoCredito === 'CUAD' && cupoDisponible === null && (
+              <div className="mb-6 p-6 border border-dashed border-gray-700 rounded-xl text-center">
+                <p className="text-gray-400 text-sm mb-4">Para continuar con esta línea, debemos verificar el margen de descuento del empleado en el Portal de Gobierno.</p>
+                <button onClick={consultarCupoCuad} disabled={consultandoCupo} className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 mx-auto transition-colors disabled:opacity-50">
+                  {consultandoCupo ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
+                  {consultandoCupo ? "Consultando con credenciales..." : "Consultar Cupo en Gobierno"}
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Plazo</label>
-                <select value={cuotas} onChange={(e) => setCuotas(e.target.value)} disabled={tipoCredito === 'ADELANTO'} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors disabled:opacity-50">
-                  <option value="1">1 Cuota</option>
-                  <option value="6">6 Cuotas</option>
-                  <option value="12">12 Cuotas</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="mt-8 flex gap-4">
-              <button onClick={() => setPaso(1)} className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 rounded-lg transition-colors">Atras</button>
-              <button onClick={() => setPaso(3)} className="flex-1 text-white font-bold py-3 rounded-lg transition-opacity hover:opacity-90" style={{ backgroundColor: colorPrimario }}>Continuar a Firma</button>
-            </div>
+            )}
+
+            {((tipoCredito === 'CUAD' && cupoDisponible !== null) || tipoCredito !== 'CUAD') && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">
+                      Monto ($) {tipoCredito === 'CUAD' && !cupoTomado && <span className="text-green-500 text-xs ml-1">(Max: {formatearMoneda(cupoDisponible || 0)})</span>}
+                    </label>
+                    <input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} disabled={cupoTomado} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors disabled:opacity-50" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">Plazo</label>
+                    <select value={cuotas} onChange={(e) => setCuotas(e.target.value)} disabled={tipoCredito === 'ADELANTO' || cupoTomado} className="w-full bg-[#111] border border-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none transition-colors disabled:opacity-50">
+                      <option value="1">1 Cuota</option><option value="6">6 Cuotas</option><option value="12">12 Cuotas</option>
+                    </select>
+                  </div>
+                </div>
+
+                {tipoCredito === 'CUAD' && !cupoTomado && (
+                  <button onClick={bloquearCupo} disabled={bloqueandoCupo} className="w-full mt-6 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-lg flex justify-center items-center gap-2 transition-colors">
+                    {bloqueandoCupo ? <Loader2 className="animate-spin" size={20} /> : <Lock size={20} />} Bloquear Cupo y Emitir CAD
+                  </button>
+                )}
+
+                {cupoTomado && (
+                  <div className="mt-6 bg-green-950/30 border border-green-900/50 rounded-xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileCheck className="text-green-500" size={24} />
+                      <div>
+                        <p className="text-sm font-bold text-green-500">Documento CAD Generado</p>
+                        <p className="text-xs text-gray-400">Cupo reservado en el portal oficial.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setCupoTomado(false)} className="text-xs text-gray-400 hover:text-white underline">Desbloquear</button>
+                  </div>
+                )}
+                
+                <div className="mt-8 flex gap-4">
+                  <button onClick={() => setPaso(1)} className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 rounded-lg transition-colors">Atras</button>
+                  <button 
+                    onClick={() => setPaso(3)} 
+                    disabled={tipoCredito === 'CUAD' && !cupoTomado}
+                    className="flex-1 text-white font-bold py-3 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-30" 
+                    style={{ backgroundColor: colorPrimario }}
+                  >
+                    Continuar a Firma
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -356,7 +415,7 @@ export default function OriginacionPage() {
               </button>
             </div>
             
-            <button onClick={() => { setPaso(1); setDni(""); setNombre(""); setScoreBcra(null); }} className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
+            <button onClick={() => { setPaso(1); setDni(""); setNombre(""); setScoreBcra(null); setCupoTomado(false); setCupoDisponible(null); }} className="text-gray-400 hover:text-white transition-colors text-sm font-medium">
               ← Cargar otra operación
             </button>
           </div>
