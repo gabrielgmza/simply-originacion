@@ -8,13 +8,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "CUIL/CUIT invalido" }, { status: 400 });
     }
 
+    // El BCRA requiere un User-Agent real para no bloquear la peticion
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    };
+
     const [resDeudas, resCheques] = await Promise.all([
-      fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`),
-      fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`)
+      fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`, { headers }),
+      fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`, { headers })
     ]);
 
-    let deudasData = null;
-    let chequesData = null;
     let peorSituacion = 1; 
     let montoTotal = 0;
     let tieneCheques = false;
@@ -23,11 +28,8 @@ export async function POST(request: Request) {
     if (resDeudas.ok) {
       const json = await resDeudas.json();
       if (json.status === 0 && json.results && json.results.periodos?.length > 0) {
-        deudasData = json.results;
         denominacion = json.results.denominacion;
-        
-        const ultimoPeriodo = json.results.periodos[0];
-        ultimoPeriodo.entidades.forEach((entidad: any) => {
+        json.results.periodos[0].entidades.forEach((entidad: any) => {
           if (entidad.situacion > peorSituacion) peorSituacion = entidad.situacion;
           montoTotal += (entidad.monto * 1000); 
         });
@@ -37,7 +39,6 @@ export async function POST(request: Request) {
     if (resCheques.ok) {
       const json = await resCheques.json();
       if (json.status === 0 && json.results) {
-        chequesData = json.results;
         tieneCheques = true;
       }
     }
@@ -47,13 +48,11 @@ export async function POST(request: Request) {
       denominacionBCRA: denominacion,
       situacionCrediticia: peorSituacion,
       montoDeudaInformada: montoTotal,
-      tieneChequesRechazados: tieneCheques,
-      rawDeudas: deudasData,
-      rawCheques: chequesData
+      tieneChequesRechazados: tieneCheques
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error("Error al consultar API BCRA:", error);
+    console.error("Error en API BCRA:", error);
     return NextResponse.json({ error: "Fallo la conexion con el Banco Central" }, { status: 500 });
   }
 }
