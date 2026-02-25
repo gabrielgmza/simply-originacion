@@ -1,28 +1,32 @@
 "use client";
 import { useState } from "react";
-import { Search, Gavel, AlertCircle, ShieldCheck } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { Search, Gavel, ShieldCheck, AlertTriangle } from "lucide-react";
 
 export default function BuscadorScoringReal() {
   const [dni, setDni] = useState("");
+  const [apellido, setApellido] = useState("");
   const [resultado, setResultado] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const consultarDNI = async () => {
+  const consultarScoring = async () => {
+    if (!dni || !apellido) {
+      alert("Ingrese DNI y Apellido para cruzar datos.");
+      return;
+    }
+
     setLoading(true);
     try {
-      // CONSULTA REAL A FIRESTORE
-      const q = query(collection(db, "padron_judicial"), where("dni", "==", dni));
-      const querySnapshot = await getDocs(q);
+      // Llamamos a nuestro backend (API Route) que hace el scraping real
+      const res = await fetch('/api/scoring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dni, apellido })
+      });
       
-      if (!querySnapshot.empty) {
-        setResultado(querySnapshot.docs[0].data());
-      } else {
-        setResultado({ limpio: true });
-      }
+      const data = await res.json();
+      setResultado(data);
     } catch (error) {
-      console.error("Error consultando padrón:", error);
+      console.error("Error de conexión:", error);
     }
     setLoading(false);
   };
@@ -33,38 +37,47 @@ export default function BuscadorScoringReal() {
         <input 
           value={dni}
           onChange={(e) => setDni(e.target.value)}
-          placeholder="Ingrese DNI para Scoring..." 
-          className="flex-1 bg-black border border-gray-800 p-4 rounded-2xl text-white font-mono text-xl outline-none focus:border-blue-500"
+          placeholder="DNI Cliente..." 
+          className="flex-1 bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500"
+        />
+        <input 
+          value={apellido}
+          onChange={(e) => setApellido(e.target.value)}
+          placeholder="Apellido (Para validar JUS)..." 
+          className="flex-1 bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-blue-500"
         />
         <button 
-          onClick={consultarDNI}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-8 rounded-2xl font-black flex items-center gap-2 transition-all"
+          onClick={consultarScoring}
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white px-8 rounded-2xl font-black flex items-center gap-2 transition-all"
         >
-          {loading ? "CONSULTANDO..." : <><Search size={20}/> CONSULTAR</>}
+          {loading ? "EXTRAYENDO DATA..." : <><Search size={20}/> AUDITAR REAL</>}
         </button>
       </div>
 
-      {resultado && (
-        <div className="animate-in slide-in-from-top-4 duration-500">
-          {resultado.tieneRegistros ? (
+      {/* RESULTADO JUDICIAL */}
+      {resultado?.judicial && (
+        <div className="animate-in slide-in-from-top-4 duration-500 mt-8">
+          {resultado.judicial.tieneRegistros ? (
             <div className="bg-red-500/10 border border-red-500/50 p-8 rounded-[40px] space-y-4">
-              <div className="flex items-center gap-3 text-red-500 font-black italic">
-                <Gavel size={24}/> ATENCIÓN: PROCESO JUDICIAL DETECTADO
+              <div className="flex items-center gap-3 text-red-500 font-black italic text-xl">
+                <Gavel size={28}/> QUIEBRA/CONCURSO DETECTADO EN MENDOZA
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="bg-black/40 p-4 rounded-2xl">
-                  <p className="text-gray-500 text-[10px] uppercase font-black">Tipo de Proceso</p>
-                  <p className="text-white font-bold">{resultado.procesos[0].tipo}</p>
-                </div>
-                <div className="bg-black/40 p-4 rounded-2xl">
-                  <p className="text-gray-500 text-[10px] uppercase font-black">Fecha Inicio</p>
-                  <p className="text-white font-bold">{resultado.procesos[0].fechaInicio}</p>
-                </div>
+              <p className="text-white text-sm">Validado contra el apellido: <strong>{resultado.apellidoValidado.toUpperCase()}</strong></p>
+              
+              <div className="grid grid-cols-1 gap-4 mt-4">
+                {resultado.judicial.procesos.map((proc: any, idx: number) => (
+                  <div key={idx} className="bg-black/40 p-4 rounded-2xl border border-red-500/20 grid grid-cols-3 gap-4">
+                    <div><p className="text-gray-500 text-[10px] uppercase font-black">Expediente</p><p className="text-white font-bold">{proc.expediente}</p></div>
+                    <div><p className="text-gray-500 text-[10px] uppercase font-black">Tipo</p><p className="text-red-500 font-black">{proc.tipo}</p></div>
+                    <div><p className="text-gray-500 text-[10px] uppercase font-black">Carátula</p><p className="text-white font-bold text-xs truncate">{proc.caratula}</p></div>
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
-            <div className="bg-green-500/10 border border-green-500/50 p-8 rounded-[40px] flex items-center gap-4 text-green-500 font-black italic">
-              <ShieldCheck size={24}/> SIN REGISTROS JUDICIALES DE CONCURSOS O QUIEBRAS
+            <div className="bg-green-500/10 border border-green-500/50 p-6 rounded-3xl flex items-center gap-4 text-green-500 font-black italic">
+              <ShieldCheck size={24}/> SIN REGISTROS JUDICIALES EN MENDOZA
             </div>
           )}
         </div>
