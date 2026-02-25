@@ -1,99 +1,139 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calculator, Percent, Info, ShieldCheck } from "lucide-react";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Calculator, Percent, Check, Landmark, Info } from "lucide-react";
 
 interface Props {
   monto: number;
   cuotas: number;
   config: any;
+  entidadId: string;
   onConfirm: (data: any) => void;
 }
 
-export default function SimuladorFinanciero({ monto, cuotas, config, onConfirm }: Props) {
-  const [analisis, setAnalisis] = useState<any>(null);
+export default function SimuladorFinanciero({ monto, cuotas, config, entidadId, onConfirm }: Props) {
+  const [ofertas, setOfertas] = useState<any[]>([]);
+  const [ofertaSeleccionada, setOfertaSeleccionada] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const tna = config.tasaInteresBase || 0;
-    const TEM = (tna / 100) / 12; // Tasa Efectiva Mensual
-    const seguroVidaMensual = config.seguroVidaPorc || 0;
-    const gastosOtorgamiento = (monto * (config.gastosOtorgamientoPorc || 0)) / 100;
-    
-    // Fórmula de Sistema Francés: Cuota = [P * i * (1 + i)^n] / [(1 + i)^n - 1]
-    const cuotaPura = (monto * TEM * Math.pow(1 + TEM, cuotas)) / (Math.pow(1 + TEM, cuotas) - 1);
-    
-    // El Seguro de Vida es porcentual sobre el saldo (simplificado sobre el capital inicial para el simulador)
-    const costoSeguroVida = (monto * (seguroVidaMensual / 100));
-    
-    const cuotaFinal = cuotaPura + costoSeguroVida;
-    const totalDevolver = cuotaFinal * cuotas;
-    
-    // Cálculo de CFT (Costo Financiero Total) - Aproximación TNA + Gastos + Seguros
-    const cft = ((totalDevolver / monto) - 1) * (12 / cuotas) * 100;
+    const calcularOfertas = async () => {
+      setLoading(true);
+      try {
+        // 1. Obtener Fondeadores de la Entidad
+        const q = query(collection(db, "fondeadores"), where("entidadId", "==", entidadId), where("activo", "==", true));
+        const snap = await getDocs(q);
+        const fondeadores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    setAnalisis({
-      cuotaPura,
-      costoSeguroVida,
-      cuotaFinal,
-      totalDevolver,
-      cft,
-      gastosOtorgamiento,
-      capitalNeto: monto - gastosOtorgamiento
-    });
-  }, [monto, cuotas, config]);
+        // 2. Agregar la opción de "Capital Propio" de la Entidad
+        const opciones = [
+          {
+            id: "propio",
+            nombre: "Capital Propio (Entidad)",
+            tna: config.tasaInteresBase,
+            plazoMax: 24
+          },
+          ...fondeadores.map(f => ({
+            id: f.id,
+            nombre: f.nombre,
+            tna: f.tnaPropia,
+            plazoMax: f.plazoMaximo
+          }))
+        ];
 
-  if (!analisis) return null;
+        // 3. Calcular matemática para cada opción
+        const resultados = opciones.map(opt => {
+          const TEM = (opt.tna / 100) / 12;
+          const cuotaPura = (monto * TEM * Math.pow(1 + TEM, cuotas)) / (Math.pow(1 + TEM, cuotas) - 1);
+          const costoSeguroVida = (monto * (config.seguroVidaPorc || 0)) / 100;
+          const cuotaFinal = cuotaPura + costoSeguroVida;
+          const totalDevolver = cuotaFinal * cuotas;
+          const cft = ((totalDevolver / monto) - 1) * (12 / cuotas) * 100;
+          const gastosOtorgamiento = (monto * (config.gastosOtorgamientoPorc || 0)) / 100;
+
+          return {
+            ...opt,
+            cuotaFinal,
+            cft,
+            totalDevolver,
+            gastosOtorgamiento,
+            capitalNeto: monto - gastosOtorgamiento
+          };
+        });
+
+        setOfertas(resultados);
+        if (resultados.length > 0) setOfertaSeleccionada(resultados[0]);
+      } catch (error) {
+        console.error("Error al calcular ofertas:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    calcularOfertas();
+  }, [monto, cuotas, config, entidadId]);
+
+  if (loading) return <div className="p-8 text-center text-gray-500 flex flex-col items-center gap-2"><Calculator className="animate-spin" /> Calculando mejores ofertas...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-[#111] border border-gray-800 p-6 rounded-xl text-center">
-          <p className="text-xs text-gray-500 uppercase mb-1">Cuota Mensual</p>
-          <p className="text-3xl font-bold" style={{ color: config.colorPrimario }}>
-            ${analisis.cuotaFinal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-        <div className="bg-[#111] border border-gray-800 p-6 rounded-xl text-center">
-          <p className="text-xs text-gray-500 uppercase mb-1">Capital Neto a Recibir</p>
-          <p className="text-2xl font-bold text-white">
-            ${analisis.capitalNeto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <p className="text-[10px] text-gray-500 mt-1">Descontado {config.gastosOtorgamientoPorc}% Gtos.</p>
-        </div>
-        <div className="bg-[#111] border border-gray-800 p-6 rounded-xl text-center border-l-4" style={{ borderLeftColor: config.colorPrimario }}>
-          <p className="text-xs text-gray-500 uppercase mb-1">CFT (Costo Fin. Total)</p>
-          <p className="text-2xl font-bold text-white">{analisis.cft.toFixed(2)}%</p>
-          <p className="text-[10px] text-gray-400 mt-1 italic font-bold">TNA: {config.tasaInteresBase}%</p>
-        </div>
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
+        <Info size={16} />
+        <span>Selecciona el Fondeador para financiar esta operación:</span>
       </div>
 
-      <div className="bg-[#0A0A0A] border border-gray-800 rounded-xl p-6">
-        <h3 className="text-sm font-bold mb-4 flex items-center gap-2 text-gray-300">
-          <Info size={16} /> Desglose del Crédito
-        </h3>
-        <div className="space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Monto Solicitado (Capital Bruto)</span>
-            <span className="text-white font-mono">${monto.toLocaleString()}</span>
+      <div className="grid grid-cols-1 gap-4">
+        {ofertas.map((oferta) => (
+          <div 
+            key={oferta.id}
+            onClick={() => setOfertaSeleccionada(oferta)}
+            className={`cursor-pointer transition-all border-2 rounded-xl p-5 flex flex-col md:flex-row justify-between items-center gap-4 ${
+              ofertaSeleccionada?.id === oferta.id 
+                ? 'bg-gray-900/50 border-[#FF5E14] shadow-[0_0_15px_rgba(255,94,20,0.1)]' 
+                : 'bg-[#0A0A0A] border-gray-800 hover:border-gray-600'
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-lg ${ofertaSeleccionada?.id === oferta.id ? 'bg-[#FF5E14] text-white' : 'bg-gray-800 text-gray-400'}`}>
+                <Landmark size={24} />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">{oferta.nombre}</h4>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">TNA: {oferta.tna}% | CFT: {oferta.cft.toFixed(2)}%</p>
+              </div>
+            </div>
+
+            <div className="text-center md:text-right">
+              <p className="text-2xl font-black text-white">${oferta.cuotaFinal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] text-gray-500">CUOTA MENSUAL (IVA Inc.)</p>
+            </div>
+
+            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${ofertaSeleccionada?.id === oferta.id ? 'bg-[#FF5E14] border-[#FF5E14]' : 'border-gray-700'}`}>
+              {ofertaSeleccionada?.id === oferta.id && <Check size={14} className="text-white" />}
+            </div>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Gastos de Otorgamiento ({config.gastosOtorgamientoPorc}%)</span>
-            <span className="text-red-400 font-mono">-${analisis.gastosOtorgamiento.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm border-t border-gray-900 pt-2">
-            <span className="text-gray-500 italic">Seguro de Vida Incluido en Cuota ({config.seguroVidaPorc}%)</span>
-            <span className="text-gray-400 font-mono">${analisis.costoSeguroVida.toLocaleString()}</span>
-          </div>
-        </div>
+        ))}
       </div>
 
-      <button 
-        onClick={() => onConfirm(analisis)}
-        className="w-full py-4 rounded-xl font-bold text-lg flex justify-center items-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.98]"
-        style={{ backgroundColor: config.colorPrimario }}
-      >
-        <ShieldCheck /> Confirmar y Generar Legajo
-      </button>
+      {ofertaSeleccionada && (
+        <div className="bg-[#111] border border-gray-800 rounded-xl p-6 mt-6">
+          <div className="flex justify-between items-end">
+            <div>
+              <p className="text-xs text-gray-500 uppercase">Capital a Desembolsar (Neto)</p>
+              <p className="text-2xl font-bold text-green-500">${ofertaSeleccionada.capitalNeto.toLocaleString('es-AR')}</p>
+            </div>
+            <button 
+              onClick={() => onConfirm(ofertaSeleccionada)}
+              className="px-10 py-4 rounded-xl font-bold text-lg transition-all hover:scale-[1.02]"
+              style={{ backgroundColor: "#FF5E14" }}
+            >
+              Confirmar Oferta
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
