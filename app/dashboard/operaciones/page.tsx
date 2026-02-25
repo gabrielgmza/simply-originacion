@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import { Search, Download, Eye, Loader2, Building2, Clock, CheckCircle, AlertTriangle, FileText } from "lucide-react";
 
 export default function OperacionesPage() {
   const { userData, entidadData } = useAuth();
+  const router = useRouter();
   const [operaciones, setOperaciones] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -161,7 +163,11 @@ export default function OperacionesPage() {
                     {renderEstado(op.estado)}
                   </td>
                   <td className="p-4 text-center">
-                    <button className="text-gray-500 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-800 inline-flex" title="Ver Legajo">
+                    <button 
+                      onClick={() => router.push(`/dashboard/operaciones/${op.id}`)}
+                      className="text-gray-500 hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-800 inline-flex" 
+                      title="Ver Legajo"
+                    >
                       <FileText size={18} />
                     </button>
                   </td>
