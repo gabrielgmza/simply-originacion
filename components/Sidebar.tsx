@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Users, Settings, FileText, ShieldCheck, 
-  PlusCircle, Briefcase, Bell, Palette, LogOut 
+  Bell, Palette, LogOut, Key, Landmark, ClipboardCheck
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -14,6 +14,12 @@ export default function Sidebar() {
     { name: "Equipo y Roles", href: "/dashboard/equipo/roles", icon: Users },
     { name: "Reglas y Tasas", href: "/dashboard/reglas", icon: Settings },
     { name: "Plantillas Legales", href: "/dashboard/plantillas", icon: FileText },
+    { name: "Credenciales CUAD", href: "/dashboard/credenciales-cuad", icon: Key },
+  ];
+
+  const menuOperaciones = [
+    { name: "Originador", href: "/dashboard/originador", icon: ClipboardCheck },
+    { name: "Cartera Activa", href: "/dashboard/cartera", icon: Landmark },
   ];
 
   const menuConfig = [
@@ -23,16 +29,25 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-64 bg-[#050505] border-r border-gray-900 h-screen flex flex-col p-4">
+    <div className="w-64 bg-[#050505] border-r border-gray-900 h-screen flex flex-col p-4 fixed left-0 top-0">
       <div className="mb-8 px-4 flex items-center gap-3">
-        <div className="w-8 h-8 bg-[#FF5E14] rounded-lg flex items-center justify-center font-bold text-white italic">S</div>
-        <h2 className="text-white font-black text-xl tracking-tighter italic">Simply Core</h2>
+        <div className="w-8 h-8 bg-[#FF5E14] rounded-lg flex items-center justify-center font-bold text-white italic">C</div>
+        <h2 className="text-white font-black text-xl tracking-tighter italic">CrediPrueba</h2>
       </div>
 
-      <nav className="flex-1 space-y-8 overflow-y-auto">
+      <nav className="flex-1 space-y-8 overflow-y-auto custom-scrollbar">
         <div>
           <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-4 mb-4">Administracion</p>
           {menuAdmin.map((item) => (
+            <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${pathname === item.href ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
+              <item.icon size={18} /> {item.name}
+            </Link>
+          ))}
+        </div>
+
+        <div>
+          <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest px-4 mb-4">Operaciones</p>
+          {menuOperaciones.map((item) => (
             <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${pathname === item.href ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
               <item.icon size={18} /> {item.name}
             </Link>
