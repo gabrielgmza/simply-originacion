@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/barrido-cuad",
-      "schedule": "0 3 * * *"
+      "path": "/api/cron/actualizacion-masiva",
+      "schedule": "0 2 */5 * *"
     }
   ]
 }
