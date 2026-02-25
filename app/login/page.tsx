@@ -1,62 +1,126 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
+import { Lock, Mail, Loader2, AlertCircle } from "lucide-react";
+import { UsuarioApp } from "@/types";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setError("");
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // NUEVO: Guardamos una Cookie segura para que el Middleware la lea
-      // Expira en 30 días (2592000 segundos)
-      document.cookie = `firebase-auth-token=${userCredential.user.uid}; path=/; max-age=2592000; secure`;
-      
-      router.push('/dashboard');
+      const user = userCredential.user;
+
+      const userRef = doc(db, "usuarios", user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data() as UsuarioApp;
+
+        if (!userData.activo) {
+          setError("Tu cuenta se encuentra inactiva. Contacta a tu administrador.");
+          setLoading(false);
+          return;
+        }
+
+        switch (userData.rol) {
+          case "MASTER_PAYSUR":
+            router.push("/admin");
+            break;
+          case "GERENTE_GENERAL":
+          case "GERENTE_SUCURSAL":
+            router.push("/dashboard/gerencia");
+            break;
+          case "VENDEDOR":
+            router.push("/dashboard/originacion");
+            break;
+          case "LIQUIDADOR":
+            router.push("/dashboard/operaciones");
+            break;
+          default:
+            router.push("/dashboard");
+        }
+      } else {
+        setError("Usuario autenticado pero sin perfil asignado en el sistema.");
+      }
     } catch (err: any) {
-      console.error('Error al iniciar sesión:', err);
-      setError('Credenciales incorrectas o usuario no encontrado.');
-      setLoading(false);
+      console.error(err);
+      setError("Credenciales inválidas o error de conexión.");
+    } finally {
+      if (!error) setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-10 bg-white rounded-xl shadow-lg z-10 border border-gray-100">
-        <div className="text-center">
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Simply Originación</h2>
-          <p className="mt-2 text-sm text-gray-600">Ingresa a tu cuenta para continuar</p>
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 font-sans selection:bg-[#FF5E14] selection:text-white">
+      <div className="w-full max-w-md bg-[#0A0A0A] border border-gray-800 rounded-2xl p-8 shadow-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Simply Core</h1>
+          <p className="text-gray-400 text-sm">Plataforma de Originación Crediticia</p>
         </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label htmlFor="email-address" className="text-sm font-medium text-gray-700">Correo Electrónico</label>
-              <input id="email-address" type="email" required className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black" placeholder="usuario@financiera.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="password" className="text-sm font-medium text-gray-700">Contraseña</label>
-              <input id="password" type="password" required className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
+
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-red-950/50 border border-red-900 text-red-400 text-sm flex items-center gap-3">
+            <AlertCircle size={18} />
+            <span>{error}</span>
           </div>
-          {error && <div className="text-red-600 text-sm text-center font-medium bg-red-50 p-3 rounded-md border border-red-200">{error}</div>}
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <button type="submit" disabled={loading} className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 transition-colors">
-              {loading ? 'Ingresando...' : 'Iniciar Sesión'}
-            </button>
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Correo Electrónico</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail size={18} className="text-gray-500" />
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full bg-[#111] border border-gray-700 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-[#FF5E14] transition-colors"
+                placeholder="usuario@entidad.com"
+              />
+            </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">Contraseña</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock size={18} className="text-gray-500" />
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full bg-[#111] border border-gray-700 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-[#FF5E14] transition-colors"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#FF5E14] hover:bg-[#E04D0B] text-white font-bold py-3.5 rounded-xl transition-colors mt-4 flex justify-center items-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="animate-spin" size={20} /> : "Ingresar al Sistema"}
+          </button>
         </form>
       </div>
     </div>
