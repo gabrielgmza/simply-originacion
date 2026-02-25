@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, ShieldCheck, FileText, Landmark, ClipboardCheck, Palette, Settings, Database } from "lucide-react";
+import { LayoutDashboard, Users, ShieldCheck, FileText, Landmark, ClipboardCheck, Palette, Database } from "lucide-react";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -16,12 +16,12 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-64 bg-[#050505] border-r border-gray-900 h-screen flex flex-col p-4 fixed left-0 top-0 z-50">
+    <div className="w-64 bg-[#050505] border-r border-gray-900 h-screen flex flex-col p-4 shrink-0">
       <div className="mb-8 px-4 flex items-center gap-3">
         <div className="w-8 h-8 bg-[#FF5E14] rounded-lg flex items-center justify-center font-bold text-white italic">C</div>
         <h2 className="text-white font-black text-xl tracking-tighter italic">CrediPrueba</h2>
       </div>
-      <nav className="flex-1 space-y-1">
+      <nav className="flex-1 space-y-1 overflow-y-auto">
         {menu.map((item) => (
           <Link key={item.name} href={item.href} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${pathname === item.href ? 'bg-white/10 text-white font-bold' : 'text-gray-500 hover:text-gray-300'}`}>
             <item.icon size={18} /> {item.name}
