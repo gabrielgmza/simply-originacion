@@ -63,12 +63,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <LayoutDashboard size={18} style={{ color: pathname === '/dashboard/gerencia' ? colorPrimario : undefined }} />
                 Panel Gerencial
               </button>
-              <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors text-gray-400 hover:bg-gray-900/50 hover:text-white">
-                <Users size={18} />
+              <button onClick={() => router.push("/dashboard/equipo")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors ${pathname === '/dashboard/equipo' ? 'bg-gray-900 text-white font-medium' : 'text-gray-400 hover:bg-gray-900/50 hover:text-white'}`}>
+                <Users size={18} style={{ color: pathname === '/dashboard/equipo' ? colorPrimario : undefined }} />
                 Equipo y Roles
               </button>
-              <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors text-gray-400 hover:bg-gray-900/50 hover:text-white">
-                <Settings size={18} />
+              <button onClick={() => router.push("/dashboard/configuracion")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors ${pathname === '/dashboard/configuracion' ? 'bg-gray-900 text-white font-medium' : 'text-gray-400 hover:bg-gray-900/50 hover:text-white'}`}>
+                <Settings size={18} style={{ color: pathname === '/dashboard/configuracion' ? colorPrimario : undefined }} />
                 Reglas y Tasas
               </button>
             </>
@@ -77,11 +77,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="pt-4 mt-4 border-t border-gray-800">
             <p className="px-4 text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Operaciones</p>
             <button onClick={() => router.push("/dashboard/originacion")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors ${pathname === '/dashboard/originacion' ? 'bg-gray-900 text-white font-medium' : 'text-gray-400 hover:bg-gray-900/50 hover:text-white'}`}>
-              <FileText size={18} />
+              <FileText size={18} style={{ color: pathname === '/dashboard/originacion' ? colorPrimario : undefined }} />
               Originador
             </button>
             <button onClick={() => router.push("/dashboard/operaciones")} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors ${pathname === '/dashboard/operaciones' ? 'bg-gray-900 text-white font-medium' : 'text-gray-400 hover:bg-gray-900/50 hover:text-white'}`}>
-              <Building2 size={18} />
+              <Building2 size={18} style={{ color: pathname === '/dashboard/operaciones' ? colorPrimario : undefined }} />
               Cartera Activa
             </button>
           </div>
