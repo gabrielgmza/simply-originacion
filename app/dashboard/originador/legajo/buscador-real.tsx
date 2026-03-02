@@ -1,8 +1,13 @@
 "use client";
 import { useState } from "react";
-import { Search, Gavel, Landmark, CheckCircle, Briefcase, Loader2, AlertTriangle, X, RefreshCw, AlertCircle, FileText, Download } from "lucide-react";
+import { Search, Gavel, Landmark, LandmarkIcon, Briefcase, Loader2, AlertTriangle, X, RefreshCw, AlertCircle, FileText, Download } from "lucide-react";
 
-export default function BuscadorScoringReal() {
+// Agregamos la prop al componente
+interface Props {
+  alBuscarExitosamente?: (dni: string) => void;
+}
+
+export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
   const [documentoRaw, setDocumentoRaw] = useState("");
   const [sexo, setSexo] = useState("M");
   const [errorInput, setErrorInput] = useState("");
@@ -32,7 +37,6 @@ export default function BuscadorScoringReal() {
   const consultarBCRA = async () => {
     setStatusBcra("procesando");
     try {
-      // VOLVEMOS A LLAMAR AL BOT (Con API v1.0 y Axios)
       const res = await fetch(`${urlBot}/api/consultar-bcra`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documento, sexo })
@@ -79,9 +83,28 @@ export default function BuscadorScoringReal() {
 
   const consultarTodo = async () => {
     if (documento.length < 7) return alert("Ingrese DNI o CUIL válido");
+    
+    // Limpiamos los estados anteriores
     setNombreCliente("");
+    setBcraData(null);
+    setJuiciosData(null);
+    setCupoData(null);
+    setStatusBcra("idle");
+    setStatusJuicios("idle");
+    setStatusBot("idle");
+    
     setGlobalLoading(true);
-    Promise.allSettled([consultarBCRA(), consultarJuicios(), consultarCupo()]).then(() => setGlobalLoading(false));
+    
+    // Disparamos las consultas en paralelo
+    Promise.allSettled([consultarBCRA(), consultarJuicios(), consultarCupo()]).then(() => {
+        setGlobalLoading(false);
+        
+        // ¡ACA ESTA EL CAMBIO!: Si no hay errores críticos, avisamos que la búsqueda fue exitosa
+        // Para simplificar, asumimos éxito si el BCRA contestó (aunque sea con deudas)
+        if(statusBcra !== "error" && documento.length >= 7) {
+            if(alBuscarExitosamente) alBuscarExitosamente(documento);
+        }
+    });
   };
 
   return (

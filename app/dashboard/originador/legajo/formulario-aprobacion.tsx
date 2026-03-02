@@ -1,8 +1,13 @@
 "use client";
 import { useState } from "react";
-import { UploadCloud, CheckCircle2, FileText, Calculator, CreditCard, Loader2 } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Calculator, CreditCard, Loader2, LandmarkIcon } from "lucide-react";
 
-export default function FormularioAprobacion() {
+// ACA ACEPTAMOS EL DNI REAL COMO UNA PROP
+interface Props {
+  dniBuscado: string;
+}
+
+export default function FormularioAprobacion({ dniBuscado }: Props) {
   const [monto, setMonto] = useState("");
   const [cuotas, setCuotas] = useState("3");
   const [archivos, setArchivos] = useState({ dniFrente: false, dniDorso: false, recibo: false });
@@ -21,7 +26,7 @@ export default function FormularioAprobacion() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          dni: "LEGAJO-ACTUAL", // Idealmente acá pasamos el DNI real del buscador
+          dni: dniBuscado, // ¡USAMOS EL DNI REAL DEL CLIENTE!
           monto: parseInt(monto), 
           cuotas: parseInt(cuotas),
           cuotaEstimada 
@@ -35,13 +40,13 @@ export default function FormularioAprobacion() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Contrato_Simply_${new Date().getTime()}.pdf`;
+      a.download = `Contrato_Simply_${dniBuscado}_${new Date().getTime()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
       
-      alert("¡Crédito Aprobado! El contrato se ha descargado correctamente.");
+      alert(`¡Crédito Aprobado para el DNI ${dniBuscado}! El contrato se ha descargado correctamente.`);
     } catch (error) {
       alert("Hubo un problema al generar el contrato.");
       console.error(error);
@@ -51,7 +56,14 @@ export default function FormularioAprobacion() {
   };
 
   return (
-    <div className="mt-8 bg-[#0A0A0A] border border-gray-800 rounded-[32px] p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="bg-[#0A0A0A] border border-gray-800 rounded-[32px] p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      
+      {/* Visualización del DNI auditado */}
+      <div className="bg-green-950/20 border border-green-900/50 p-4 rounded-xl flex items-center gap-3 mb-6">
+          <LandmarkIcon className="text-green-500" size={20}/>
+          <p className="text-sm font-bold text-gray-300">Auditoría completada para el DNI: <span className="text-white font-black text-base font-mono ml-1">{dniBuscado}</span></p>
+      </div>
+
       <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
         <div className="bg-green-600/20 p-2 rounded-xl text-green-500"><Calculator size={24}/></div>
         <h2 className="text-2xl font-black text-white uppercase tracking-wide">Estructura del Crédito</h2>
@@ -90,7 +102,7 @@ export default function FormularioAprobacion() {
           
           <div className="bg-[#111] p-4 rounded-xl border border-gray-800 flex justify-between items-center">
              <div>
-                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Cuota Estimada</p>
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Cuota Estimada mensual</p>
                 <p className="text-white font-mono text-xl">${cuotaEstimada.toLocaleString('es-AR')}</p>
              </div>
              <CreditCard className="text-gray-600" size={28}/>
