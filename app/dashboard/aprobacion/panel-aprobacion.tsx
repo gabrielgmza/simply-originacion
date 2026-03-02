@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { crearNotificacion } from "@/lib/notificaciones/internas";
 import {
   CheckCircle2, XCircle, AlertTriangle, Eye, FileText,
   User, Loader2, MessageSquare, ChevronDown, ChevronUp,
@@ -129,6 +130,27 @@ export default function PanelAprobacion() {
         detalles: comentario || `Acción: ${accion}`,
         fecha: serverTimestamp(),
       });
+
+      // Notificación interna
+      if (accion === "APROBADO") {
+        await crearNotificacion({
+          entidadId: entidadData?.id || "",
+          tipo: "LISTO_LIQUIDAR",
+          titulo: "Operación lista para liquidar",
+          descripcion: `${op.cliente?.nombre} — $${(op.financiero?.montoSolicitado || 0).toLocaleString("es-AR")}`,
+          operacionId: op.id,
+          linkDestino: "/dashboard/liquidacion",
+        });
+      } else if (accion === "RECHAZADO") {
+        await crearNotificacion({
+          entidadId: entidadData?.id || "",
+          tipo: "OPERACION_RECHAZADA",
+          titulo: "Operación rechazada",
+          descripcion: `${op.cliente?.nombre} — ${comentario || "Sin motivo"}`,
+          operacionId: op.id,
+          linkDestino: "/dashboard/aprobacion",
+        });
+      }
 
       setComentarios(prev => ({ ...prev, [op.id]: "" }));
       cargar();

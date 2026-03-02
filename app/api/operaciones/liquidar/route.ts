@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { enviarWhatsApp } from "@/lib/notificaciones/whatsapp";
+import { crearNotificacion } from "@/lib/notificaciones/internas";
 
 export async function POST(request: Request) {
   try {
@@ -33,6 +34,16 @@ export async function POST(request: Request) {
         operacionId,
       });
     }
+
+    // Notificación interna al equipo
+    await crearNotificacion({
+      entidadId: data.entidadId,
+      tipo: "LISTO_LIQUIDAR",
+      titulo: "Crédito liquidado",
+      descripcion: `${data.cliente?.nombre} — $${(data.financiero?.montoSolicitado || 0).toLocaleString("es-AR")} desembolsado`,
+      operacionId,
+      linkDestino: "/dashboard/cartera",
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
