@@ -7,9 +7,10 @@ import {
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowLeft, CheckCircle2, Clock, AlertTriangle,
-  Loader2, CreditCard, Plus, FileText, Eye, User
+  Loader2, CreditCard, Plus, FileText, Eye, User, Shield
 } from "lucide-react";
 
 interface Pago {
@@ -149,7 +150,11 @@ export default function DetalleOperacionPage({ params }: { params: { id: string 
           <h1 className="text-2xl font-black text-white">{op.cliente?.nombre || "Sin nombre"}</h1>
           <p className="text-gray-500 text-sm">DNI: {op.cliente?.dni} · ID: {id.slice(0, 12)}...</p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Link href={`/dashboard/auditoria/${id}`}
+            className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-white px-3 py-2 bg-gray-900 hover:bg-gray-800 rounded-xl transition-colors border border-gray-800">
+            <Shield size={14} /> Auditoría
+          </Link>
           <span className={`text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${
             op.estado === "EN_MORA" ? "bg-red-900/30 text-red-400 border-red-800/50" :
             op.estado === "LIQUIDADO" ? "bg-green-900/30 text-green-400 border-green-800/50" :
