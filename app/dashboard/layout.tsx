@@ -7,7 +7,7 @@ import { auth } from "@/lib/firebase";
 import {
   LayoutDashboard, UserCheck, Briefcase, Users,
   FileSignature, Webhook, Palette, Menu, X, LogOut,
-  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall
+  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall, MessageSquare
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Credenciales CUAD",     ruta: "/dashboard/credenciales",         visible: puedeConfigurar },
     { nombre: "Configuracion API",     ruta: "/dashboard/configuracion/api",    visible: puedeConfigurar },
     { nombre: "Marca",                 ruta: "/dashboard/configuracion/marca",  visible: puedeConfigurar },
+    { nombre: "WhatsApp",              ruta: "/dashboard/configuracion/whatsapp", visible: puedeConfigurar },
   ];
 
   const iconos: Record<string, React.ReactNode> = {
@@ -57,6 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     "/dashboard/credenciales":        <Key size={20} />,
     "/dashboard/configuracion/api":   <Webhook size={20} />,
     "/dashboard/configuracion/marca": <Palette size={20} />,
+    "/dashboard/configuracion/whatsapp": <MessageSquare size={20} />,
   };
 
   const cerrarSesion = async () => {
