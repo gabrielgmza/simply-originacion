@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Search, Gavel, Landmark, CheckCircle, Briefcase, Loader2, AlertTriangle, X, RefreshCw, AlertCircle, FileText } from "lucide-react";
+import { Search, Gavel, Landmark, CheckCircle, Briefcase, Loader2, AlertTriangle, X, RefreshCw, AlertCircle, FileText, Download } from "lucide-react";
 
 export default function BuscadorScoringReal() {
   const [documentoRaw, setDocumentoRaw] = useState("");
@@ -16,14 +16,17 @@ export default function BuscadorScoringReal() {
   const [statusJuicios, setStatusJuicios] = useState<"idle" | "procesando" | "completado" | "error">("idle");
   const [statusBot, setStatusBot] = useState<"idle" | "procesando" | "completado" | "error" | "no_empleado">("idle");
 
+  // Loading global es SOLO para la primer carga masiva
+  const [globalLoading, setGlobalLoading] = useState(false);
+
   const [modalActivo, setModalActivo] = useState<"bcra" | "cuad" | "juicios" | null>(null);
 
   const urlBot = "https://simply-bot-mendoza-97321115506.us-central1.run.app";
-  const documento = documentoRaw.replace(/[\s\-]/g, ''); // Limpio para consultas
+  const documento = documentoRaw.replace(/[\s\-]/g, '');
 
   const handleInputChange = (e: any) => {
     const val = e.target.value;
-    if (/[\s\-]/.test(val)) setErrorInput("Por favor, ingrese los números sin guiones ni espacios.");
+    if (/[\s\-]/.test(val)) setErrorInput("Ingrese los números sin guiones ni espacios.");
     else setErrorInput("");
     setDocumentoRaw(val);
   };
@@ -75,10 +78,13 @@ export default function BuscadorScoringReal() {
     } catch { setStatusBot("error"); }
   };
 
-  const consultarTodo = () => {
+  const consultarTodo = async () => {
     if (documento.length < 7) return alert("Ingrese DNI o CUIL válido");
     setNombreCliente("");
-    consultarBCRA(); consultarJuicios(); consultarCupo();
+    setGlobalLoading(true);
+    
+    // Disparamos en paralelo, pero el globalLoading se apaga rapido para no freezar el boton
+    Promise.allSettled([consultarBCRA(), consultarJuicios(), consultarCupo()]).then(() => setGlobalLoading(false));
   };
 
   return (
@@ -90,14 +96,13 @@ export default function BuscadorScoringReal() {
           <select value={sexo} onChange={(e) => setSexo(e.target.value)} className="bg-black border border-gray-800 p-4 rounded-2xl text-white font-bold">
             <option value="M">MASCULINO</option><option value="F">FEMENINO</option>
           </select>
-          <button onClick={consultarTodo} disabled={statusBot === "procesando"} className="bg-blue-600 hover:bg-blue-500 text-white px-10 rounded-2xl font-black flex items-center justify-center gap-2 uppercase transition-all disabled:opacity-50">
-            <Search size={20}/> Evaluar
+          <button onClick={consultarTodo} disabled={globalLoading} className="bg-blue-600 hover:bg-blue-500 text-white px-10 rounded-2xl font-black flex items-center justify-center gap-2 uppercase transition-all disabled:opacity-50">
+            {globalLoading ? <Loader2 className="animate-spin" size={20}/> : <Search size={20}/>} {globalLoading ? "Auditando..." : "Evaluar"}
           </button>
         </div>
         {errorInput && <p className="text-red-500 text-sm font-bold ml-4 flex items-center gap-1"><AlertCircle size={14}/>{errorInput}</p>}
       </div>
 
-      {/* TARJETA DE IDENTIDAD */}
       {nombreCliente && (
         <div className="bg-[#111] border border-blue-900/50 p-4 rounded-2xl flex items-center gap-4 animate-in fade-in">
            <div className="bg-blue-600/20 p-3 rounded-xl"><Search className="text-blue-500"/></div>
@@ -108,7 +113,7 @@ export default function BuscadorScoringReal() {
         </div>
       )}
 
-      {/* TARJETAS DE SCORING */}
+      {/* TARJETAS */}
       {(statusBcra !== "idle" || statusBot !== "idle" || statusJuicios !== "idle") && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
           
@@ -116,7 +121,7 @@ export default function BuscadorScoringReal() {
           <div onClick={() => statusBot === "completado" && setModalActivo("cuad")} className={`bg-[#0A0A0A] border ${statusBot === "error" ? 'border-red-900' : 'border-gray-800'} rounded-[32px] p-6 relative ${statusBot === "completado" ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}>
             <div className="flex justify-between items-start mb-4">
                <h3 className="text-gray-500 font-black uppercase text-[10px] tracking-widest flex items-center gap-2"><Briefcase size={14}/> Cupo Mendoza</h3>
-               {statusBot === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarCupo();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50"><RefreshCw size={14}/></button>}
+               {statusBot === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarCupo();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50 transition-colors"><RefreshCw size={14}/></button>}
             </div>
             {statusBot === "procesando" && <p className="text-blue-500 font-bold animate-pulse text-sm">Validando portal...</p>}
             {statusBot === "no_empleado" && <p className="text-orange-500 font-bold text-sm italic">No registra legajo</p>}
@@ -132,9 +137,9 @@ export default function BuscadorScoringReal() {
           <div onClick={() => statusBcra === "completado" && setModalActivo("bcra")} className={`bg-[#0A0A0A] border ${statusBcra === "error" ? 'border-red-900' : 'border-gray-800'} rounded-[32px] p-6 relative ${statusBcra === "completado" ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}>
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-gray-500 font-black uppercase text-[10px] tracking-widest flex items-center gap-2"><Landmark size={14}/> Situación BCRA</h3>
-              {statusBcra === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarBCRA();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50"><RefreshCw size={14}/></button>}
+              {statusBcra === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarBCRA();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50 transition-colors"><RefreshCw size={14}/></button>}
             </div>
-            {statusBcra === "procesando" && <p className="text-blue-500 font-bold animate-pulse text-sm">Consultando...</p>}
+            {statusBcra === "procesando" && <p className="text-blue-500 font-bold animate-pulse text-sm">Consultando Central...</p>}
             {statusBcra === "error" && <p className="text-red-500 font-bold text-sm flex flex-col gap-1"><AlertTriangle size={16}/> PROVEEDOR CON PROBLEMAS</p>}
             {statusBcra === "completado" && bcraData && (
               bcraData.tieneDeudas ? <p className="text-2xl font-black text-white uppercase">SITUACIÓN {bcraData.peorSituacion}</p> : <p className="text-green-500 font-bold italic">SITUACIÓN 1 - LIMPIO</p>
@@ -145,7 +150,7 @@ export default function BuscadorScoringReal() {
           <div onClick={() => statusJuicios === "completado" && juiciosData?.tieneRegistros && setModalActivo("juicios")} className={`bg-[#0A0A0A] border ${statusJuicios === "error" ? 'border-red-900' : 'border-gray-800'} rounded-[32px] p-6 relative ${statusJuicios === "completado" && juiciosData?.tieneRegistros ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}>
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-gray-500 font-black uppercase text-[10px] tracking-widest flex items-center gap-2"><Gavel size={14}/> Concursos / Quiebras</h3>
-              {statusJuicios === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarJuicios();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50"><RefreshCw size={14}/></button>}
+              {statusJuicios === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarJuicios();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50 transition-colors"><RefreshCw size={14}/></button>}
             </div>
             {statusJuicios === "procesando" && <p className="text-blue-500 font-bold animate-pulse text-sm">Buscando expedientes...</p>}
             {statusJuicios === "error" && <p className="text-red-500 font-bold text-sm flex flex-col gap-1"><AlertTriangle size={16}/> PROVEEDOR CON PROBLEMAS</p>}
@@ -159,7 +164,7 @@ export default function BuscadorScoringReal() {
         </div>
       )}
 
-      {/* MODALES DETALLADOS */}
+      {/* MODALES */}
       {modalActivo && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setModalActivo(null)}>
           <div className="bg-[#111] border border-gray-800 rounded-[32px] p-8 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -171,12 +176,25 @@ export default function BuscadorScoringReal() {
                 <h2 className="text-2xl font-black text-white mb-4 uppercase flex items-center gap-2"><Landmark/> Detalle BCRA</h2>
                 <p className="text-gray-400 mb-4 font-mono">CUIL: {bcraData.cuil}</p>
                 {bcraData.tieneDeudas ? (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     {bcraData.detalles.map((d:any, i:number) => (
                       <div key={i} className="bg-black p-4 rounded-xl border border-gray-800">
-                        <p className="text-white font-bold">{d.entidad}</p>
-                        <p className="text-red-500 text-sm">Situación: {d.situacion} | Periodo: {d.periodo}</p>
-                        <p className="text-gray-400 font-mono mt-1">${(d.monto * 1000).toLocaleString('es-AR')}</p>
+                        <div className="flex justify-between items-start">
+                           <div>
+                             <p className="text-white font-bold">{d.entidad}</p>
+                             <p className="text-red-500 text-sm">Sit. {d.situacion} | Período: {d.periodo}</p>
+                           </div>
+                           <p className="text-xl text-white font-mono">${(d.monto * 1000).toLocaleString('es-AR')}</p>
+                        </div>
+                        {/* PUNITORIOS UI */}
+                        {parseInt(d.situacion) > 1 && (
+                          <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between items-center">
+                            <span className="text-xs text-gray-500 uppercase font-bold">Punitorios Est.</span>
+                            <span className="text-orange-500 text-xs font-bold border border-orange-900 bg-orange-900/20 px-2 py-1 rounded">
+                              +15% Mora
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -195,10 +213,16 @@ export default function BuscadorScoringReal() {
                         <div><p className="text-gray-500 text-xs font-bold uppercase">Expediente</p><p className="text-white font-mono">{reg.expediente}</p></div>
                         <div><p className="text-gray-500 text-xs font-bold uppercase">Tipo</p><p className="text-red-500 font-bold uppercase">{reg.tipo}</p></div>
                         <div><p className="text-gray-500 text-xs font-bold uppercase">Fecha de Inicio</p><p className="text-white">{reg.fecha}</p></div>
-                        <div><p className="text-gray-500 text-xs font-bold uppercase">Razón Social</p><p className="text-white text-sm">{reg.nombre}</p></div>
+                        <div><p className="text-gray-500 text-xs font-bold uppercase">Tribunal</p><p className="text-white text-sm">{reg.tribunal}</p></div>
                       </div>
-                      <button onClick={() => alert(`Tribunal Asignado:\n${reg.tribunal}\n\n(Aquí se integrará la descarga del PDF judicial)`)} className="w-full bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors">
-                        <FileText size={18}/> Ver Certificado / Tribunal
+                      
+                      {/* BOTÓN DESCARGAR CERTIFICADO O VER TRIBUNAL */}
+                      <button 
+                        onClick={() => reg.linkCertificado ? window.open(reg.linkCertificado, '_blank') : alert(`No hay documento adjunto online para este expediente.\nDiríjase al: ${reg.tribunal}`)} 
+                        className={`w-full p-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${reg.linkCertificado ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}
+                      >
+                        {reg.linkCertificado ? <Download size={18}/> : <FileText size={18}/>} 
+                        {reg.linkCertificado ? "Descargar Certificado" : "Ver Datos del Tribunal"}
                       </button>
                     </div>
                   ))}
