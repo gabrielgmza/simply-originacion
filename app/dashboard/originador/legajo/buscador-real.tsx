@@ -16,9 +16,7 @@ export default function BuscadorScoringReal() {
   const [statusJuicios, setStatusJuicios] = useState<"idle" | "procesando" | "completado" | "error">("idle");
   const [statusBot, setStatusBot] = useState<"idle" | "procesando" | "completado" | "error" | "no_empleado">("idle");
 
-  // Loading global es SOLO para la primer carga masiva
   const [globalLoading, setGlobalLoading] = useState(false);
-
   const [modalActivo, setModalActivo] = useState<"bcra" | "cuad" | "juicios" | null>(null);
 
   const urlBot = "https://simply-bot-mendoza-97321115506.us-central1.run.app";
@@ -34,7 +32,8 @@ export default function BuscadorScoringReal() {
   const consultarBCRA = async () => {
     setStatusBcra("procesando");
     try {
-      const res = await fetch(`/api/bcra`, {
+      // VOLVEMOS A LLAMAR AL BOT (Con API v1.0 y Axios)
+      const res = await fetch(`${urlBot}/api/consultar-bcra`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documento, sexo })
       });
@@ -82,8 +81,6 @@ export default function BuscadorScoringReal() {
     if (documento.length < 7) return alert("Ingrese DNI o CUIL válido");
     setNombreCliente("");
     setGlobalLoading(true);
-    
-    // Disparamos en paralelo, pero el globalLoading se apaga rapido para no freezar el boton
     Promise.allSettled([consultarBCRA(), consultarJuicios(), consultarCupo()]).then(() => setGlobalLoading(false));
   };
 
@@ -186,7 +183,6 @@ export default function BuscadorScoringReal() {
                            </div>
                            <p className="text-xl text-white font-mono">${(d.monto * 1000).toLocaleString('es-AR')}</p>
                         </div>
-                        {/* PUNITORIOS UI */}
                         {parseInt(d.situacion) > 1 && (
                           <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between items-center">
                             <span className="text-xs text-gray-500 uppercase font-bold">Punitorios Est.</span>
@@ -216,7 +212,6 @@ export default function BuscadorScoringReal() {
                         <div><p className="text-gray-500 text-xs font-bold uppercase">Tribunal</p><p className="text-white text-sm">{reg.tribunal}</p></div>
                       </div>
                       
-                      {/* BOTÓN DESCARGAR CERTIFICADO O VER TRIBUNAL */}
                       <button 
                         onClick={() => reg.linkCertificado ? window.open(reg.linkCertificado, '_blank') : alert(`No hay documento adjunto online para este expediente.\nDiríjase al: ${reg.tribunal}`)} 
                         className={`w-full p-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${reg.linkCertificado ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}
