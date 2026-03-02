@@ -7,7 +7,7 @@ import { auth } from "@/lib/firebase";
 import {
   LayoutDashboard, UserCheck, Briefcase, Users,
   FileSignature, Webhook, Palette, Menu, X, LogOut,
-  BadgeCheck, Key, TrendingUp, Banknote
+  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Panel de Aprobacion",   ruta: "/dashboard/aprobacion",           visible: puedeAprobar },
     { nombre: "Liquidacion",           ruta: "/dashboard/liquidacion",          visible: puedeLiquidar },
     { nombre: "Cartera Activa",        ruta: "/dashboard/cartera",              visible: true },
+    { nombre: "Cobranzas",             ruta: "/dashboard/cobranzas",            visible: puedeLiquidar },
     { nombre: "Reportes",              ruta: "/dashboard/reportes",             visible: puedeAprobar },
     { nombre: "Equipo y Roles",        ruta: "/dashboard/equipo",               visible: puedeConfigurar },
     { nombre: "Plantillas Legales",    ruta: "/dashboard/legal",                visible: puedeConfigurar },
@@ -49,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     "/dashboard/aprobacion":          <BadgeCheck size={20} />,
     "/dashboard/liquidacion":         <Banknote size={20} />,
     "/dashboard/cartera":             <Briefcase size={20} />,
+    "/dashboard/cobranzas":           <PhoneCall size={20} />,
     "/dashboard/reportes":            <TrendingUp size={20} />,
     "/dashboard/equipo":              <Users size={20} />,
     "/dashboard/legal":               <FileSignature size={20} />,
