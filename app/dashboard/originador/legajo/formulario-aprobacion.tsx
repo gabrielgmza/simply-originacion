@@ -1,15 +1,53 @@
 "use client";
 import { useState } from "react";
-import { UploadCloud, CheckCircle2, FileText, Calculator, CreditCard } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Calculator, CreditCard, Loader2 } from "lucide-react";
 
 export default function FormularioAprobacion() {
   const [monto, setMonto] = useState("");
   const [cuotas, setCuotas] = useState("3");
   const [archivos, setArchivos] = useState({ dniFrente: false, dniDorso: false, recibo: false });
+  const [generandoPdf, setGenerandoPdf] = useState(false);
 
   const simularUpload = (tipo: 'dniFrente' | 'dniDorso' | 'recibo') => {
-    // Acá luego conectaremos con AWS S3 o Vercel Blob
     setArchivos(prev => ({ ...prev, [tipo]: true }));
+  };
+
+  const cuotaEstimada = monto ? Math.round((parseInt(monto) * 1.5) / parseInt(cuotas)) : 0;
+
+  const generarYDescargarContrato = async () => {
+    setGenerandoPdf(true);
+    try {
+      const res = await fetch('/api/documentos/generar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          dni: "LEGAJO-ACTUAL", // Idealmente acá pasamos el DNI real del buscador
+          monto: parseInt(monto), 
+          cuotas: parseInt(cuotas),
+          cuotaEstimada 
+        })
+      });
+
+      if (!res.ok) throw new Error("Error generando documento");
+
+      // Truco para descargar archivos blob en el navegador
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Contrato_Simply_${new Date().getTime()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      alert("¡Crédito Aprobado! El contrato se ha descargado correctamente.");
+    } catch (error) {
+      alert("Hubo un problema al generar el contrato.");
+      console.error(error);
+    } finally {
+      setGenerandoPdf(false);
+    }
   };
 
   return (
@@ -53,7 +91,7 @@ export default function FormularioAprobacion() {
           <div className="bg-[#111] p-4 rounded-xl border border-gray-800 flex justify-between items-center">
              <div>
                 <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Cuota Estimada</p>
-                <p className="text-white font-mono text-xl">${monto ? Math.round((parseInt(monto) * 1.5) / parseInt(cuotas)).toLocaleString('es-AR') : "0"}</p>
+                <p className="text-white font-mono text-xl">${cuotaEstimada.toLocaleString('es-AR')}</p>
              </div>
              <CreditCard className="text-gray-600" size={28}/>
           </div>
@@ -86,11 +124,12 @@ export default function FormularioAprobacion() {
       {/* BOTÓN FINAL */}
       <div className="mt-8 pt-6 border-t border-gray-800">
         <button 
-          disabled={!monto || !archivos.dniFrente}
+          onClick={generarYDescargarContrato}
+          disabled={!monto || !archivos.dniFrente || generandoPdf}
           className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-black uppercase tracking-widest py-5 rounded-2xl transition-all flex justify-center items-center gap-2 text-lg"
         >
-          <CheckCircle2 size={24}/>
-          Aprobar Crédito y Generar Contrato
+          {generandoPdf ? <Loader2 className="animate-spin" size={24}/> : <CheckCircle2 size={24}/>}
+          {generandoPdf ? "Generando Pagaré..." : "Aprobar Crédito y Generar Contrato"}
         </button>
       </div>
     </div>
