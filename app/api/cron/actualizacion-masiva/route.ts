@@ -1,41 +1,64 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, updateDoc, doc, increment } from "firebase/firestore";
+import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
-  // Validación de seguridad para que solo el CRON pueda dispararlo
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('No autorizado', { status: 401 });
-  }
+    try {
+        // 1. SEGURIDAD: Verificamos que esta ruta solo pueda ser llamada por Vercel
+        const authHeader = request.headers.get('authorization');
+        if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        }
 
-  try {
-    const operacionesSnap = await getDocs(collection(db, "operaciones"));
-    
-    const promesas = operacionesSnap.docs.map(async (documento) => {
-      const data = documento.data();
-      const entidadId = data.entidadId;
-      
-      // 1. Obtenemos la configuración de la entidad ("Su mundo aparte")
-      const entidadSnap = await getDocs(collection(db, "entidades")); // Simplificado para el ejemplo
-      const configEntidad = entidadSnap.docs.find(e => e.id === entidadId)?.data()?.configuracion;
-      
-      const tasaPunitoria = configEntidad?.tasaPunitoriaDiaria || 0.12; // Valor por defecto si no existe
+        console.log("🚀 Iniciando barrido masivo de cartera activa...");
 
-      // 2. Calculamos punitorio diario sobre el saldo vencido
-      const interesDiario = (data.financiero?.saldoPendiente || 0) * (tasaPunitoria / 100);
+        // 2. SIMULACIÓN DE BASE DE DATOS (Acá iría tu "await db.prestamos.findMany(...)")
+        // Traemos todos los préstamos que están "ACTIVOS" y evaluamos su situación
+        const prestamosActivos = [
+            { id: "P-001", cliente: "Juan Perez", cuotaMensual: 50000, diasAtraso: 0, tasaMora: 0.15 },  // Al día
+            { id: "P-002", cliente: "Maria Gomez", cuotaMensual: 30000, diasAtraso: 5, tasaMora: 0.15 }, // 5 días de atraso
+            { id: "P-003", cliente: "Carlos Ruiz", cuotaMensual: 80000, diasAtraso: 45, tasaMora: 0.15 } // 45 días de atraso
+        ];
 
-      // 3. Actualizamos: Mora acumulada + Refresco de CUAD
-      return updateDoc(doc(db, "operaciones", documento.id), {
-        "financiero.interesesPunitorios": increment(interesDiario),
-        "financiero.cuadRefrescado": new Date().toISOString(),
-        "estadoCuad": "ACTUALIZADO_CRON"
-      });
-    });
+        let creditosActualizados = 0;
+        let registroCambios = [];
 
-    await Promise.all(promesas);
-    return NextResponse.json({ success: true, procesados: promesas.length });
-  } catch (error) {
-    return NextResponse.json({ error: "Fallo en el proceso nocturno" }, { status: 500 });
-  }
+        // 3. LÓGICA DE CÁLCULO DE PUNITORIOS
+        for (const prestamo of prestamosActivos) {
+            if (prestamo.diasAtraso > 0) {
+                // Si tiene atraso, le calculamos la mora. 
+                // Ejemplo: +15% de punitorios sobre la cuota base por estar vencido
+                const punitorios = prestamo.cuotaMensual * prestamo.tasaMora;
+                const deudaTotalActualizada = prestamo.cuotaMensual + punitorios;
+
+                // Acá iría tu actualización en DB: "await db.prestamos.update({ ... })"
+                
+                registroCambios.push({
+                    id: prestamo.id,
+                    cliente: prestamo.cliente,
+                    atraso: prestamo.diasAtraso,
+                    cuotaOriginal: prestamo.cuotaMensual,
+                    punitoriosAplicados: punitorios,
+                    nuevoSaldo: deudaTotalActualizada
+                });
+
+                creditosActualizados++;
+            }
+        }
+
+        console.log(`✅ Barrido completado. ${creditosActualizados} créditos pasaron a mora.`);
+
+        // 4. RESPUESTA DEL SCRIPT
+        return NextResponse.json({
+            success: true,
+            mensaje: `Barrido nocturno finalizado con éxito`,
+            estadisticas: {
+                totalAnalizados: prestamosActivos.length,
+                pasadosAMora: creditosActualizados,
+                detalles: registroCambios
+            }
+        });
+
+    } catch (error: any) {
+        console.error("❌ Error en el barrido masivo:", error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
 }

@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/actualizacion-masiva",
-      "schedule": "0 2 */5 * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
