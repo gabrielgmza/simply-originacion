@@ -5,7 +5,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, Loader2, AlertCircle } from "lucide-react";
+import { Lock, Mail, Loader2, AlertCircle, ShieldOff } from "lucide-react";
 import { UsuarioApp } from "@/types";
 
 export default function LoginPage() {
@@ -24,104 +24,137 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      const userRef = doc(db, "usuarios", user.uid);
-      const userSnap = await getDoc(userRef);
+      // 1. Obtener perfil del usuario
+      const userSnap = await getDoc(doc(db, "usuarios", user.uid));
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data() as UsuarioApp;
-
-        if (!userData.activo) {
-          setError("Tu cuenta se encuentra inactiva. Contacta a tu administrador.");
-          setLoading(false);
-          return;
-        }
-
-        switch (userData.rol) {
-          case "MASTER_PAYSUR":
-            router.push("/admin");
-            break;
-          case "GERENTE_GENERAL":
-          case "GERENTE_SUCURSAL":
-            router.push("/dashboard/gerencia");
-            break;
-          case "VENDEDOR":
-            router.push("/dashboard/originacion");
-            break;
-          case "LIQUIDADOR":
-            router.push("/dashboard/operaciones");
-            break;
-          default:
-            router.push("/dashboard");
-        }
-      } else {
-        setError("Usuario autenticado pero sin perfil asignado en el sistema.");
+      if (!userSnap.exists()) {
+        await auth.signOut();
+        setError("Usuario sin perfil asignado. Contactá a tu administrador.");
+        setLoading(false);
+        return;
       }
+
+      const userData = userSnap.data() as UsuarioApp;
+
+      // 2. Verificar si el usuario está activo
+      if (!userData.activo) {
+        await auth.signOut();
+        setError("Tu cuenta está inactiva. Contactá a tu administrador.");
+        setLoading(false);
+        return;
+      }
+
+      // 3. Si tiene entidad asignada, verificar que NO esté bloqueada
+      if (userData.entidadId && userData.rol !== "MASTER_PAYSUR") {
+        const entidadSnap = await getDoc(doc(db, "entidades", userData.entidadId));
+
+        if (entidadSnap.exists()) {
+          const entidad = entidadSnap.data();
+          if (entidad.activa === false) {
+            await auth.signOut();
+            setError("Tu organización está temporalmente suspendida. Contactá a soporte.");
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 4. Redirigir según rol
+      switch (userData.rol) {
+        case "MASTER_PAYSUR":
+          router.push("/admin");
+          break;
+        case "GERENTE_GENERAL":
+        case "GERENTE_SUCURSAL":
+          router.push("/dashboard/gerencia");
+          break;
+        case "VENDEDOR":
+          router.push("/dashboard/originacion");
+          break;
+        case "LIQUIDADOR":
+          router.push("/dashboard/operaciones");
+          break;
+        default:
+          router.push("/dashboard");
+      }
+
     } catch (err: any) {
       console.error(err);
-      setError("Credenciales inválidas o error de conexión.");
+      if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
+        setError("Email o contraseña incorrectos.");
+      } else {
+        setError("Error de conexión. Intentá de nuevo.");
+      }
     } finally {
-      if (!error) setLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 font-sans selection:bg-[#FF5E14] selection:text-white">
-      <div className="w-full max-w-md bg-[#0A0A0A] border border-gray-800 rounded-2xl p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Simply Core</h1>
-          <p className="text-gray-400 text-sm">Plataforma de Originación Crediticia</p>
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-md">
+
+        {/* Logo */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 mb-4">
+            <div className="bg-[#FF5E14] text-white font-black px-3 py-1.5 rounded-lg text-xl">S</div>
+            <span className="text-white font-black italic text-2xl tracking-tight">Simply</span>
+          </div>
+          <p className="text-gray-500 text-sm">Plataforma de Originación de Créditos</p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-950/50 border border-red-900 text-red-400 text-sm flex items-center gap-3">
-            <AlertCircle size={18} />
-            <span>{error}</span>
-          </div>
-        )}
+        {/* Card */}
+        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-8">
+          <h1 className="text-xl font-bold text-white mb-6">Iniciar sesión</h1>
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Correo Electrónico</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail size={18} className="text-gray-500" />
-              </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-[#111] border border-gray-700 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-[#FF5E14] transition-colors"
-                placeholder="usuario@entidad.com"
-              />
+          {/* Error */}
+          {error && (
+            <div className="mb-5 p-4 bg-red-900/20 border border-red-800/50 rounded-xl flex items-start gap-3">
+              {error.includes("suspendida") ? (
+                <ShieldOff size={18} className="text-red-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
+              )}
+              <p className="text-sm text-red-300">{error}</p>
             </div>
-          </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1.5">Contraseña</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock size={18} className="text-gray-500" />
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5 uppercase tracking-wider">Email</label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600" />
+                <input
+                  type="email" required value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-gray-500 transition-colors"
+                />
               </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full bg-[#111] border border-gray-700 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:border-[#FF5E14] transition-colors"
-                placeholder="••••••••"
-              />
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#FF5E14] hover:bg-[#E04D0B] text-white font-bold py-3.5 rounded-xl transition-colors mt-4 flex justify-center items-center gap-2 disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : "Ingresar al Sistema"}
-          </button>
-        </form>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5 uppercase tracking-wider">Contraseña</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600" />
+                <input
+                  type="password" required value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-gray-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit" disabled={loading}
+              className="w-full bg-[#FF5E14] hover:bg-[#E04D0B] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors mt-2">
+              {loading ? <Loader2 size={18} className="animate-spin" /> : "Ingresar"}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-gray-700 text-xs mt-6">Simply by PaySur © 2026</p>
       </div>
     </div>
   );
