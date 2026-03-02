@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -7,7 +8,7 @@ import { auth } from "@/lib/firebase";
 import {
   LayoutDashboard, UserCheck, Briefcase, Users,
   FileSignature, Webhook, Palette, Menu, X, LogOut,
-  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall, MessageSquare
+  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall, MessageSquare, Bell
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Configuracion API",     ruta: "/dashboard/configuracion/api",    visible: puedeConfigurar },
     { nombre: "Marca",                 ruta: "/dashboard/configuracion/marca",  visible: puedeConfigurar },
     { nombre: "WhatsApp",              ruta: "/dashboard/configuracion/whatsapp", visible: puedeConfigurar },
+    { nombre: "Notificaciones",        ruta: "/dashboard/configuracion/notificaciones", visible: puedeConfigurar },
   ];
 
   const iconos: Record<string, React.ReactNode> = {
@@ -59,6 +61,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     "/dashboard/configuracion/api":   <Webhook size={20} />,
     "/dashboard/configuracion/marca": <Palette size={20} />,
     "/dashboard/configuracion/whatsapp": <MessageSquare size={20} />,
+    "/dashboard/configuracion/notificaciones": <Bell size={20} />,
   };
 
   const cerrarSesion = async () => {
@@ -133,7 +136,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Navbar />
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+      </div>
 
       {menuAbierto && (
         <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setMenuAbierto(false)} />

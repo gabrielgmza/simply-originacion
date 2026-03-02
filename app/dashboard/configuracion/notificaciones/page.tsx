@@ -1,97 +1,148 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { MessageSquare, ShieldCheck, DollarSign, Save, Loader2, BellRing, AlertTriangle } from "lucide-react";
+import { Save, Loader2, CheckCircle2, Bell } from "lucide-react";
+import { NOTIF_CONFIG, TipoNotificacion } from "@/lib/notificaciones/internas";
 
-export default function ConfigNotificaciones() {
+const ROLES = [
+  { key: "GERENTE_GENERAL",     label: "Gerente General" },
+  { key: "GERENTE_SUCURSAL",    label: "Gerente Sucursal" },
+  { key: "SUPERVISOR_SUCURSAL", label: "Supervisor" },
+  { key: "VENDEDOR",            label: "Vendedor" },
+  { key: "LIQUIDADOR",         label: "Liquidador" },
+];
+
+// Config por defecto: todos los eventos activos
+const defaultConfig = (): Record<TipoNotificacion, boolean> =>
+  Object.keys(NOTIF_CONFIG).reduce((acc, k) => ({ ...acc, [k]: true }), {} as any);
+
+export default function ConfigNotificacionesPage() {
   const { entidadData } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [config, setConfig] = useState({
-    ws_activo: false,
-    ws_preventivo_48hs: false,
-    ws_aviso_mora: false,
-    ws_costo_por_mensaje: 0.05
-  });
-
-  useEffect(() => {
-    if (entidadData?.configuracion?.notificaciones) {
-      setConfig(entidadData.configuracion.notificaciones);
-    }
-  }, [entidadData]);
-
-  const guardar = async () => {
-    setLoading(true);
-    try {
-      const ref = doc(db, "entidades", entidadData.id);
-      await updateDoc(ref, { "configuracion.notificaciones": config });
-      alert("Configuración de notificaciones guardada.");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [config, setConfig] = useState<Record<TipoNotificacion, boolean>>(defaultConfig());
+  // Roles editables por tipo: entidad puede restringir qué roles reciben cada tipo
+  const [rolesConfig, setRolesConfig] = useState<Record<TipoNotificacion, string[]>>(
+    Object.keys(NOTIF_CONFIG).reduce((acc, k) => ({
+      ...acc,
+      [k]: NOTIF_CONFIG[k as TipoNotificacion].rolesDestino
+    }), {} as any)
+  );
+  const [guardando, setGuardando] = useState(false);
+  const [guardado, setGuardado]   = useState(false);
+  const [loading, setLoading]     = useState(true);
 
   const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
 
+  useEffect(() => {
+    const cargar = async () => {
+      if (!entidadData?.id) return;
+      try {
+        const snap = await getDoc(doc(db, "entidades", entidadData.id));
+        const d = snap.data()?.configuracion;
+        if (d?.notificacionesInternas)  setConfig(prev => ({ ...prev, ...d.notificacionesInternas }));
+        if (d?.notificacionesRoles)     setRolesConfig(prev => ({ ...prev, ...d.notificacionesRoles }));
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    };
+    cargar();
+  }, [entidadData]);
+
+  const guardar = async () => {
+    if (!entidadData?.id) return;
+    setGuardando(true);
+    try {
+      await updateDoc(doc(db, "entidades", entidadData.id), {
+        "configuracion.notificacionesInternas": config,
+        "configuracion.notificacionesRoles": rolesConfig,
+      });
+      setGuardado(true);
+      setTimeout(() => setGuardado(false), 3000);
+    } catch { alert("Error al guardar."); }
+    finally { setGuardando(false); }
+  };
+
+  const toggleRol = (tipo: TipoNotificacion, rol: string) => {
+    setRolesConfig(prev => {
+      const actual = prev[tipo] || [];
+      return {
+        ...prev,
+        [tipo]: actual.includes(rol)
+          ? actual.filter(r => r !== rol)
+          : [...actual, rol]
+      };
+    });
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gray-500" size={28} /></div>;
+
   return (
-    <div className="p-8 max-w-4xl mx-auto text-white">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold flex items-center gap-3">
-          <MessageSquare style={{ color: colorPrimario }} /> Centro de Comunicaciones
-        </h1>
-        <p className="text-gray-400">Controla el envío automático de WhatsApp y sus costos operativos.</p>
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl">
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Notificaciones</h1>
+          <p className="text-gray-500 text-sm mt-1">Configurá qué alertas recibe cada rol</p>
+        </div>
+        <button onClick={guardar} disabled={guardando}
+          className="flex items-center gap-2 px-5 py-2.5 text-white font-bold rounded-xl text-sm disabled:opacity-50 transition-all"
+          style={{ backgroundColor: colorPrimario }}>
+          {guardando ? <Loader2 size={15} className="animate-spin" /> :
+           guardado  ? <CheckCircle2 size={15} /> : <Save size={15} />}
+          {guardado ? "¡Guardado!" : "Guardar"}
+        </button>
       </div>
 
-      <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-8 space-y-6">
-        <div className="flex justify-between items-center p-6 bg-white/5 rounded-2xl border border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-500/10 text-green-500 rounded-lg">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <p className="font-bold text-lg">WhatsApp Business API</p>
-              <p className="text-xs text-gray-500 font-mono tracking-tighter uppercase">Tarifa por envío: ${config.ws_costo_por_mensaje} USD</p>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input 
-              type="checkbox" 
-              className="sr-only peer"
-              checked={config.ws_activo} 
-              onChange={(e) => setConfig({...config, ws_activo: e.target.checked})}
-            />
-            <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-600"></div>
-          </label>
-        </div>
+      <div className="space-y-3">
+        {(Object.keys(NOTIF_CONFIG) as TipoNotificacion[]).map(tipo => {
+          const cfg = NOTIF_CONFIG[tipo];
+          const activo = config[tipo] !== false;
+          return (
+            <div key={tipo} className={`bg-[#0A0A0A] border rounded-2xl p-5 transition-opacity ${!activo ? "opacity-50" : ""}`}
+              style={{ borderColor: activo ? `${cfg.color}33` : "#1f2937" }}>
 
-        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${!config.ws_activo && 'opacity-20 pointer-events-none grayscale'}`}>
-          <div className="p-5 border border-gray-800 rounded-xl bg-[#050505]">
-            <BellRing className="text-blue-500 mb-3" size={20} />
-            <p className="text-sm font-bold mb-1">Recordatorio 48hs</p>
-            <p className="text-xs text-gray-500 mb-4">Avisa al cliente antes del vencimiento para reducir mora temprana.</p>
-            <input type="checkbox" checked={config.ws_preventivo_48hs} onChange={(e) => setConfig({...config, ws_preventivo_48hs: e.target.checked})} />
-          </div>
-          
-          <div className="p-5 border border-gray-800 rounded-xl bg-[#050505]">
-            <AlertTriangle className="text-amber-500 mb-3" size={20} />
-            <p className="text-sm font-bold mb-1">Aviso de Mora (Día 1)</p>
-            <p className="text-xs text-gray-500 mb-4">Notificación inmediata al detectar el primer día de atraso.</p>
-            <input type="checkbox" checked={config.ws_aviso_mora} onChange={(e) => setConfig({...config, ws_aviso_mora: e.target.checked})} />
-          </div>
-        </div>
+              {/* Fila principal */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{cfg.emoji}</span>
+                  <div>
+                    <p className="font-bold text-white text-sm">{cfg.label}</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-widest">{tipo.replace(/_/g, " ")}</p>
+                  </div>
+                </div>
+                {/* Toggle activo/inactivo */}
+                <button onClick={() => setConfig(p => ({ ...p, [tipo]: !p[tipo] }))}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${activo ? "bg-green-500" : "bg-gray-700"}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${activo ? "left-5" : "left-0.5"}`} />
+                </button>
+              </div>
 
-        <button 
-          onClick={guardar}
-          disabled={loading}
-          className="w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all hover:brightness-110 active:scale-[0.98]"
-          style={{ backgroundColor: colorPrimario }}
-        >
-          {loading ? <Loader2 className="animate-spin" /> : <Save />} Actualizar Configuración de Gastos
-        </button>
+              {/* Roles que reciben esta notificación */}
+              {activo && (
+                <div>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-2">Reciben esta alerta:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {ROLES.map(rol => {
+                      const seleccionado = rolesConfig[tipo]?.includes(rol.key);
+                      return (
+                        <button key={rol.key}
+                          onClick={() => toggleRol(tipo, rol.key)}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all ${
+                            seleccionado
+                              ? "text-white border-transparent"
+                              : "text-gray-600 border-gray-700 hover:border-gray-500"
+                          }`}
+                          style={seleccionado ? { backgroundColor: cfg.color } : {}}>
+                          {rol.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
