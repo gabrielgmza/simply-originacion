@@ -1,115 +1,68 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-// Función matemática para descifrar CUITs a partir de un DNI
-function getValidCuits(dniStr: string) {
-  const prefixes = ['20', '27', '23', '24'];
-  const cuits: string[] = [];
-  const d = dniStr.padStart(8, '0');
-  
-  prefixes.forEach(pref => {
-    const base = pref + d;
-    const multipliers = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-    let sum = 0;
-    for (let i = 0; i < 10; i++) sum += parseInt(base[i]) * multipliers[i];
-    const rem = sum % 11;
-    const v = rem === 0 ? 0 : 11 - rem;
-    
-    if (v !== 10) {
-        cuits.push(base + v);
-    } else {
-      if (pref === '20') cuits.push('23' + d + '9');
-      if (pref === '27') cuits.push('23' + d + '4');
-    }
-  });
-  return [...new Set(cuits)];
+function calcularCuil(dni: string, sexo: string): string {
+    const dniStr = dni.padStart(8, '0');
+    let prefijo = sexo === 'M' ? '20' : '27';
+    const multiplicadores = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+    let base = prefijo + dniStr;
+    let suma = 0;
+    for (let i = 0; i < 10; i++) suma += parseInt(base[i]) * multiplicadores[i];
+    let resto = suma % 11;
+    let digito = 11 - resto;
+    if (digito === 11) digito = 0;
+    if (digito === 10) { prefijo = '23'; digito = sexo === 'M' ? 9 : 4; base = prefijo + dniStr; }
+    return base + digito.toString();
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { dni } = body;
+export async function POST(req: Request) {
+    try {
+        const { documento, sexo } = await req.json();
+        const docLimpio = documento.replace(/[^0-9]/g, '');
+        const cuil = docLimpio.length >= 10 ? docLimpio : calcularCuil(docLimpio, sexo);
+        
+        console.log(`[BCRA DIRECTO] Consultando CUIL: ${cuil}`);
 
-    if (!dni || dni.length < 7) {
-      return NextResponse.json({ error: 'DNI inválido' }, { status: 400 });
-    }
-
-    console.log(`[BCRA API DIRECTA] Iniciando búsqueda para DNI: ${dni}`);
-    const cuits = getValidCuits(dni);
-    let bcraData: any = null;
-    let personaFound = false;
-
-    // 1. Conexión directa a la API oficial del BCRA
-    for (const cuit of cuits) {
-      try {
-        const response = await fetch(`https://api.bcra.gob.ar/centraldedeudores/v1/Deudas/${cuit}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' // Simulamos ser un navegador para evitar bloqueos
-          }
+        // Consulta directa desde el servidor de Vercel a la nueva API
+        const response = await fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`, {
+            method: 'GET',
+            headers: { 
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            cache: 'no-store' // CRÍTICO: Evita que Vercel devuelva un error viejo guardado en memoria
         });
 
-        if (response.status === 200) {
-          const data = await response.json();
-          if (data.results && data.results.denominacion) {
-            bcraData = data.results;
-            personaFound = true;
-            console.log(`[BCRA API] CUIT Encontrado: ${cuit}`);
-            break; // Si lo encuentra, dejamos de probar otros CUITs
-          }
-        }
-      } catch (e) {
-        console.warn(`[BCRA API] Intento fallido de red con CUIT ${cuit}`);
-      }
-    }
-
-    // 2. Procesamiento de la información oficial
-    let situacion = 1;
-    let descripcion = 'Normal (Sin Historial en BCRA)';
-    let entidades: string[] = ['Sin deudas bancarias registradas'];
-    let deudaTotal = 0;
-    let apto = true;
-
-    if (personaFound && bcraData) {
-        if (bcraData.entidades && bcraData.entidades.length > 0) {
-            let peorSituacion = 1;
-            entidades = [];
+        if (response.ok) {
+            const data = await response.json();
+            let bcraData = { error: false, tieneDeudas: false, peorSituacion: "1", nombre: "", cuil: cuil, detalles: [] };
             
-            // Sumamos todas las deudas y buscamos la peor situación crediticia
-            bcraData.entidades.forEach((ent: any) => {
-                if (ent.situacion > peorSituacion) peorSituacion = ent.situacion;
-                // El BCRA manda montos en miles. Multiplicamos por 1000 para el valor real.
-                deudaTotal += (ent.monto * 1000); 
-                entidades.push(ent.entidad);
-            });
-
-            situacion = peorSituacion;
-
-            const descripciones: Record<number, string> = {
-                1: 'Normal',
-                2: 'Riesgo Bajo',
-                3: 'Riesgo Medio',
-                4: 'Alto Riesgo',
-                5: 'Irrecuperable',
-                6: 'Irrecuperable (Técnica)'
-            };
-            
-            descripcion = descripciones[situacion] || 'Desconocida';
-            entidades = [...new Set(entidades)]; // Filtramos bancos repetidos
-            apto = situacion <= 2; // Política: Solo aprobamos Situación 1 y 2
+            if (data.results) {
+                bcraData.nombre = data.results.denominacion || "";
+                
+                // Mapeo de la nueva estructura v1.0
+                if (data.results.periodos && data.results.periodos.length > 0) {
+                    const ultimoPeriodo = data.results.periodos[0];
+                    if (ultimoPeriodo.entidades && ultimoPeriodo.entidades.length > 0) {
+                        bcraData.tieneDeudas = true;
+                        bcraData.detalles = ultimoPeriodo.entidades.map((ent: any) => ({
+                            entidad: ent.entidad,
+                            situacion: ent.situacion.toString(),
+                            monto: ent.monto,
+                            periodo: ultimoPeriodo.periodo
+                        }));
+                        const situaciones = ultimoPeriodo.entidades.map((d: any) => parseInt(d.situacion));
+                        bcraData.peorSituacion = Math.max(...situaciones).toString();
+                    }
+                }
+            }
+            return NextResponse.json({ success: true, bcra: bcraData });
+        } else if (response.status === 404) {
+            // El 404 de esta API significa "No tiene deudas", está Limpio.
+            return NextResponse.json({ success: true, bcra: { error: false, tieneDeudas: false, peorSituacion: "1", cuil } });
         } else {
-            descripcion = 'Normal (Sin deudas activas)';
+            return NextResponse.json({ success: false, error: true, mensaje: `El Gobierno devolvió HTTP ${response.status}` }, { status: 200 });
         }
+    } catch (error: any) {
+        return NextResponse.json({ success: false, error: true, mensaje: error.message }, { status: 200 });
     }
-
-    // 3. Devolvemos la data limpia al frontend
-    return NextResponse.json({ 
-        success: true, 
-        data: { situacion, descripcion, entidades, deudaTotal, apto } 
-    });
-
-  } catch (error) {
-    console.error('[BCRA API] Error general:', error);
-    return NextResponse.json({ error: 'Fallo de conexión con el servidor del BCRA' }, { status: 500 });
-  }
 }

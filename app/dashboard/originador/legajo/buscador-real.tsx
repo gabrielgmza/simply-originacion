@@ -34,7 +34,7 @@ export default function BuscadorScoringReal() {
   const consultarBCRA = async () => {
     setStatusBcra("procesando");
     try {
-      const res = await fetch(`${urlBot}/api/consultar-bcra`, {
+      const res = await fetch(`/api/bcra`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documento, sexo })
       });
