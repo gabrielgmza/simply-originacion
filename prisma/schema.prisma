@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cliente {
+  id        String   @id @default(cuid())
+  dni       String   @unique
+  nombre    String?
+  email     String?
+  telefono  String?
+  
+  creditos  Credito[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Credito {
+  id             String   @id @default(cuid())
+  clienteId      String
+  cliente        Cliente  @relation(fields: [clienteId], references: [id])
+  
+  montoOtorgado  Float
+  cantidadCuotas Int
+  tasaMora       Float    @default(0.15)
+  estado         String   @default("ACTIVO")
+  
+  urlContrato    String?
+  urlDniFrente   String?
+  urlDniDorso    String?
+  urlRecibo      String?
+
+  cuotas         Cuota[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Cuota {
+  id             String   @id @default(cuid())
+  creditoId      String
+  credito        Credito  @relation(fields: [creditoId], references: [id])
+  
+  numeroCuota    Int
+  montoBase      Float
+  punitorios     Float    @default(0)
+  montoTotal     Float
+  
+  fechaVencimiento DateTime
+  fechaPago        DateTime?
+  estado           String   @default("PENDIENTE") // PENDIENTE, PAGADA, VENCIDA
+  
+  pagos360Id     String?  @unique
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
