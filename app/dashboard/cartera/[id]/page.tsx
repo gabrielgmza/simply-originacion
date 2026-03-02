@@ -151,6 +151,10 @@ export default function DetalleOperacionPage({ params }: { params: { id: string 
           <p className="text-gray-500 text-sm">DNI: {op.cliente?.dni} · ID: {id.slice(0, 12)}...</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Link href={`/dashboard/cartera/${id}/estado-cuenta`}
+            className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-white px-3 py-2 bg-gray-900 hover:bg-gray-800 rounded-xl transition-colors border border-gray-800">
+            <FileText size={14} /> Estado de Cuenta
+          </Link>
           <Link href={`/dashboard/auditoria/${id}`}
             className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-white px-3 py-2 bg-gray-900 hover:bg-gray-800 rounded-xl transition-colors border border-gray-800">
             <Shield size={14} /> Auditoría
