@@ -18,6 +18,7 @@ const MODULO_INFO: Record<string, { label: string; desc: string }> = {
   privados:    { label: "Privados",    desc: "Créditos personales sin descuento por haberes"      },
   fondeadores: { label: "Fondeadores", desc: "Motor de subasta entre fondeadores externos"        },
   renovaciones:{ label: "Renovaciones",desc: "Módulo de renovación de créditos activos"           },
+  email:       { label: "Email",        desc: "Notificaciones automáticas por email (costo adicional)" },
   pagos360:    { label: "Pagos 360",   desc: "Cobro automático de cuotas vía débito CBU"          },
 };
 
@@ -39,6 +40,7 @@ export default function OnboardingEntidadPage() {
   const [modulos, setModulos] = useState<Record<string, boolean>>({
     cuad: true, adelantos: true, privados: true,
     fondeadores: false, renovaciones: false, pagos360: false,
+    email: false,
   });
 
   // Paso 2: gerente
