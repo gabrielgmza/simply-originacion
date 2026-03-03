@@ -8,7 +8,7 @@ import { auth } from "@/lib/firebase";
 import {
   LayoutDashboard, UserCheck, Briefcase, Users,
   FileSignature, Webhook, Palette, Menu, X, LogOut,
-  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall, MessageSquare, Bell, Calculator
+  BadgeCheck, Key, TrendingUp, Banknote, PhoneCall, MessageSquare, Bell, Calculator, Building2
 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Liquidacion",           ruta: "/dashboard/liquidacion",          visible: puedeLiquidar },
     { nombre: "Cartera Activa",        ruta: "/dashboard/cartera",              visible: true },
     { nombre: "Simulador",             ruta: "/dashboard/simulador",            visible: true },
+    { nombre: "Sucursales",            ruta: "/dashboard/sucursales",           visible: puedeConfigurar },
     { nombre: "Cobranzas",             ruta: "/dashboard/cobranzas",            visible: puedeLiquidar },
     { nombre: "Reportes",              ruta: "/dashboard/reportes",             visible: puedeAprobar },
     { nombre: "Equipo y Roles",        ruta: "/dashboard/equipo",               visible: puedeConfigurar },
@@ -55,6 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     "/dashboard/liquidacion":         <Banknote size={20} />,
     "/dashboard/cartera":             <Briefcase size={20} />,
     "/dashboard/simulador":           <Calculator size={20} />,
+    "/dashboard/sucursales":          <Building2 size={20} />,
     "/dashboard/cobranzas":           <PhoneCall size={20} />,
     "/dashboard/reportes":            <TrendingUp size={20} />,
     "/dashboard/equipo":              <Users size={20} />,

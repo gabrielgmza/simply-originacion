@@ -51,7 +51,9 @@ export default function CarteraPage() {
   const router = useRouter();
   const [ops, setOps] = useState<Operacion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState("");
+  const [busqueda, setBusqueda]     = useState("");
+  const [sucursales, setSucursales]   = useState<any[]>([]);
+  const [sucursalFiltro, setSucursalFiltro] = useState<string>("TODAS");
   const [filtroEstado, setFiltroEstado] = useState("TODOS");
 
   const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
