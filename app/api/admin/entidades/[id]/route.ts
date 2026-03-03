@@ -2,9 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const batch = adminDb.batch();
     const cols = ["usuarios","operaciones","sucursales","fondeadores","credencialesCuad","logs_operaciones"];
     for (const col of cols) {
@@ -20,9 +20,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     await adminDb.collection("entidades").doc(id).update({
       comisiones: body.comisiones,
