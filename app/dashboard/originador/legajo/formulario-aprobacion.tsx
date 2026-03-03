@@ -1,277 +1,247 @@
 "use client";
+// app/dashboard/originador/legajo/formulario-aprobacion.tsx
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import SimuladorFinanciero from "@/app/dashboard/originacion/SimuladorFinanciero";
 import {
   UploadCloud, CheckCircle2, FileText, Calculator,
-  CreditCard, Loader2, LandmarkIcon, Send, Copy, RefreshCw,
-  Smartphone, ExternalLink
+  CreditCard, Loader2, LandmarkIcon, Landmark,
+  ChevronRight, ChevronDown, Save
 } from "lucide-react";
 
 interface Props {
-  dniBuscado: string;
-  nombreCliente?: string;
+  dniBuscado:    string;
+  scoreCliente?: number;
+  datosBcra?:    any;
 }
 
-export default function FormularioAprobacion({ dniBuscado, nombreCliente = "" }: Props) {
-  const { userData, entidadData } = useAuth();
+export default function FormularioAprobacion({ dniBuscado, scoreCliente = 500, datosBcra }: Props) {
+  const { entidadData, userData } = useAuth();
+  const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
 
-  const [monto, setMonto] = useState("");
-  const [cuotas, setCuotas] = useState("3");
-  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const [monto,            setMonto]            = useState("");
+  const [cuotas,           setCuotas]           = useState("12");
+  const [archivos,         setArchivos]         = useState({ dniFrente: false, dniDorso: false, recibo: false });
+  const [ofertaConfirmada, setOfertaConfirmada] = useState<any>(null);
+  const [mostrarSim,       setMostrarSim]       = useState(false);
+  const [guardando,        setGuardando]        = useState(false);
+  const [operacionId,      setOperacionId]      = useState<string | null>(null);
+  const [ok,               setOk]               = useState(false);
 
-  // Onboarding
-  const [linkGenerado, setLinkGenerado] = useState("");
-  const [legajoId, setLegajoId] = useState("");
-  const [generandoLink, setGenerandoLink] = useState(false);
-  const [linkCopiado, setLinkCopiado] = useState(false);
-  const [onboardingCompleto, setOnboardingCompleto] = useState(false);
+  const simularUpload = (tipo: "dniFrente" | "dniDorso" | "recibo") =>
+    setArchivos(prev => ({ ...prev, [tipo]: true }));
 
-  const cuotaEstimada = monto ? Math.round((parseInt(monto) * 1.5) / parseInt(cuotas)) : 0;
+  const montoNum  = parseInt(monto)  || 0;
+  const cuotasNum = parseInt(cuotas) || 12;
 
-  // ── Generar link de onboarding ──────────────────────────────────────────────
-  const generarLinkOnboarding = async () => {
-    if (!monto) { alert("Primero ingresá el monto del crédito."); return; }
-    setGenerandoLink(true);
-    try {
-      // Crear la operación en Firestore primero para obtener el legajoId
-      const res = await fetch("/api/onboarding/crear-link", {
-        method: "POST",
+  // Preview cuota rápida sin motor
+  const TEM          = ((entidadData?.configuracion?.tasaInteresBase || 80) / 100) / 12;
+  const cuotaEstimada = montoNum && cuotasNum
+    ? Math.round((montoNum * TEM * Math.pow(1 + TEM, cuotasNum)) / (Math.pow(1 + TEM, cuotasNum) - 1))
+    : 0;
+
+  const handleMontoChange  = (v: string) => { setMonto(v);  setOfertaConfirmada(null); setMostrarSim(false); };
+  const handleCuotasChange = (v: string) => { setCuotas(v); setOfertaConfirmada(null); setMostrarSim(false); };
+
+  const onConfirmarOferta = async (oferta: any) => {
+    setOfertaConfirmada(oferta);
+    setMostrarSim(false);
+    // Si ya hay op creada, asignar fondeador
+    if (operacionId && oferta.fondeadorId !== "propio") {
+      await fetch("/api/fondeo", {
+        method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          legajoId: legajoId || `LEG-${dniBuscado}-${Date.now()}`,
-          dni: dniBuscado,
-          nombreCliente,
-          entidadId: entidadData?.id || "default",
-          vendedorId: userData?.uid || "",
+          operacionId, fondeadorId: oferta.fondeadorId,
+          oferta, usuarioEmail: userData?.email, entidadId: entidadData?.id,
         }),
       });
+    }
+  };
 
+  const guardarOperacion = async () => {
+    if (!montoNum || !ofertaConfirmada) return;
+    setGuardando(true);
+    try {
+      const res = await fetch("/api/operaciones", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entidadId:  entidadData?.id,
+          vendedorId: userData?.uid,
+          sucursalId: userData?.sucursalId,
+          tipo:       "PRIVADO",
+          estado:     "EN_REVISION",
+          cliente: {
+            dni:       dniBuscado,
+            nombre:    datosBcra?.denominacionBCRA || "—",
+            scoreBcra: datosBcra?.situacionCrediticia,
+          },
+          financiero: {
+            montoSolicitado: montoNum,
+            cuotas:          cuotasNum,
+            valorCuota:      ofertaConfirmada.cuotaFinal,
+            tna:             ofertaConfirmada.tna,
+            cft:             ofertaConfirmada.cft,
+            totalDevolver:   ofertaConfirmada.totalDevolver,
+          },
+          scoring: { puntaje: scoreCliente },
+          fondeo: {
+            fondeadorId: ofertaConfirmada.fondeadorId,
+            nombre:      ofertaConfirmada.nombre,
+            tna:         ofertaConfirmada.tna,
+            cuotaFinal:  ofertaConfirmada.cuotaFinal,
+            comision:    ofertaConfirmada.comision,
+          },
+          legajo: {
+            dniFrenteUrl: archivos.dniFrente ? "pendiente_upload" : null,
+            dniDorsoUrl:  archivos.dniDorso  ? "pendiente_upload" : null,
+          },
+        }),
+      });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      setLinkGenerado(data.link);
-      setLegajoId(legajoId || `LEG-${dniBuscado}-${Date.now()}`);
-    } catch (e: any) {
-      alert("Error al generar el link: " + e.message);
-    } finally {
-      setGenerandoLink(false);
-    }
+      if (data.id || data.success) { setOperacionId(data.id || data.operacionId); setOk(true); }
+    } finally { setGuardando(false); }
   };
 
-  // ── Copiar link ─────────────────────────────────────────────────────────────
-  const copiarLink = async () => {
-    await navigator.clipboard.writeText(linkGenerado);
-    setLinkCopiado(true);
-    setTimeout(() => setLinkCopiado(false), 2000);
-  };
-
-  // ── Enviar por WhatsApp ─────────────────────────────────────────────────────
-  const enviarWhatsApp = () => {
-    const texto = encodeURIComponent(
-      `Hola${nombreCliente ? ` ${nombreCliente.split(" ")[0]}` : ""}! Te enviamos el link para completar tu documentación del crédito. Solo te llevará 5 minutos:\n\n${linkGenerado}`
-    );
-    window.open(`https://wa.me/?text=${texto}`, "_blank");
-  };
-
-  // ── Generar CAD con firma ───────────────────────────────────────────────────
-  const generarCAD = async () => {
-    if (!monto) { alert("Ingresá el monto del crédito."); return; }
-    setGenerandoPdf(true);
-    try {
-      const res = await fetch("/api/documentos/generar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          legajoId: legajoId || `LEG-${dniBuscado}`,
-          dni: dniBuscado,
-          nombreCliente,
-          monto: parseInt(monto),
-          cuotas: parseInt(cuotas),
-          cuotaEstimada,
-          tna: entidadData?.configuracion?.tasaInteresBase || 0,
-          entidadNombre: entidadData?.nombreFantasia || "Entidad",
-          entidadId: entidadData?.id || "default",
-        }),
-      });
-
-      if (!res.ok) throw new Error("Error generando CAD");
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `CAD_Simply_${dniBuscado}_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      alert("Hubo un problema al generar el CAD.");
-    } finally {
-      setGenerandoPdf(false);
-    }
-  };
+  const fmt = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 
   return (
-    <div className="bg-[#0A0A0A] border border-gray-800 rounded-[32px] p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
+    <div className="bg-[#0A0A0A] border border-gray-800 rounded-[32px] p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
 
-      {/* DNI auditado */}
+      {/* DNI badge */}
       <div className="bg-green-950/20 border border-green-900/50 p-4 rounded-xl flex items-center gap-3">
-        <LandmarkIcon className="text-green-500" size={20} />
+        <LandmarkIcon className="text-green-500" size={18}/>
         <p className="text-sm font-bold text-gray-300">
-          Auditoría completada para el DNI:{" "}
-          <span className="text-white font-black text-base font-mono ml-1">{dniBuscado}</span>
-          {nombreCliente && <span className="text-gray-400 ml-2">— {nombreCliente}</span>}
+          DNI auditado: <span className="text-white font-black font-mono ml-1">{dniBuscado}</span>
+          {scoreCliente > 0 && <span className="ml-3 text-xs text-gray-500">Score: <span className="text-white font-black">{scoreCliente}</span></span>}
         </p>
       </div>
 
-      {/* ── SECCIÓN 1: ESTRUCTURA DEL CRÉDITO ── */}
-      <div>
-        <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
-          <div className="bg-green-600/20 p-2 rounded-xl text-green-500"><Calculator size={24} /></div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-wide">Estructura del Crédito</h2>
-        </div>
+      <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+        <div className="bg-green-600/20 p-2 rounded-xl text-green-500"><Calculator size={20}/></div>
+        <h2 className="text-xl font-black text-white uppercase tracking-wide">Estructura del Crédito</h2>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Monto y cuotas */}
-          <div className="space-y-6">
-            <div>
-              <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Monto a Otorgar ($)</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                <input
-                  type="number" value={monto} onChange={(e) => setMonto(e.target.value)}
-                  placeholder="Ej: 150000"
-                  className="w-full bg-black border border-gray-800 p-4 pl-8 rounded-2xl text-white outline-none focus:border-green-500 font-mono text-lg transition-colors"
-                />
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        {/* Monto + cuotas */}
+        <div className="space-y-5">
+          <div>
+            <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Monto a otorgar</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+              <input type="number" value={monto} onChange={e => handleMontoChange(e.target.value)}
+                placeholder="Ej: 150000"
+                className="w-full bg-black border border-gray-800 p-4 pl-8 rounded-2xl text-white outline-none focus:border-green-500 font-mono text-lg"/>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Plan de Cuotas</label>
-              <select value={cuotas} onChange={(e) => setCuotas(e.target.value)}
-                className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-green-500 font-bold transition-colors">
-                <option value="1">1 Cuota</option>
-                <option value="3">3 Cuotas</option>
-                <option value="6">6 Cuotas</option>
-                <option value="12">12 Cuotas</option>
-                <option value="18">18 Cuotas</option>
-                <option value="24">24 Cuotas</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-2">Plan de cuotas</label>
+            <select value={cuotas} onChange={e => handleCuotasChange(e.target.value)}
+              className="w-full bg-black border border-gray-800 p-4 rounded-2xl text-white outline-none focus:border-green-500 font-bold">
+              {[1,3,6,9,12,18,24,36].map(n => (
+                <option key={n} value={n}>{n} {n === 1 ? "cuota" : "cuotas"}</option>
+              ))}
+            </select>
+          </div>
 
+          {/* Preview cuota */}
+          {montoNum > 0 && !ofertaConfirmada && (
             <div className="bg-[#111] p-4 rounded-xl border border-gray-800 flex justify-between items-center">
               <div>
-                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Cuota Estimada mensual</p>
-                <p className="text-white font-mono text-xl">${cuotaEstimada.toLocaleString("es-AR")}</p>
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Cuota estimada</p>
+                <p className="text-white font-mono text-xl">{fmt(cuotaEstimada)}</p>
+                <p className="text-[10px] text-gray-600 mt-0.5">Preliminar — confirmar con fondeador</p>
               </div>
-              <CreditCard className="text-gray-600" size={28} />
+              <CreditCard className="text-gray-600" size={24}/>
             </div>
-          </div>
+          )}
 
-          {/* Info entidad */}
-          <div className="bg-[#111] border border-gray-800 rounded-2xl p-5 space-y-3 h-fit">
-            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-3">Parámetros de la Entidad</p>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">TNA</span>
-              <span className="text-white font-bold">{entidadData?.configuracion?.tasaInteresBase || "—"}%</span>
+          {/* Oferta confirmada */}
+          {ofertaConfirmada && (
+            <div className="bg-green-900/10 border border-green-900/40 p-4 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 text-green-400 text-xs font-bold uppercase">
+                <CheckCircle2 size={13}/> Fondeador confirmado
+              </div>
+              <p className="font-black text-white">{ofertaConfirmada.nombre}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><p className="text-gray-500">Cuota</p><p className="text-white font-black">{fmt(ofertaConfirmada.cuotaFinal)}</p></div>
+                <div><p className="text-gray-500">TNA</p><p className="text-white font-black">{ofertaConfirmada.tna}%</p></div>
+              </div>
+              <button onClick={() => setMostrarSim(true)} className="text-xs text-gray-500 hover:text-white underline">
+                Cambiar fondeador
+              </button>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Seguro de Vida</span>
-              <span className="text-white font-bold">{entidadData?.configuracion?.seguroVidaPorc || "—"}%</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Gastos Otorg.</span>
-              <span className="text-white font-bold">{entidadData?.configuracion?.gastosOtorgamientoPorc || "—"}%</span>
-            </div>
-          </div>
+          )}
+
+          {/* Botón abrir simulador */}
+          {montoNum > 0 && !ofertaConfirmada && (
+            <button onClick={() => setMostrarSim(!mostrarSim)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition-all font-bold text-sm">
+              <Landmark size={14}/>
+              {mostrarSim ? "Ocultar fondeadores" : "Ver fondeadores disponibles"}
+              {mostrarSim ? <ChevronDown size={12}/> : <ChevronRight size={12}/>}
+            </button>
+          )}
+        </div>
+
+        {/* Documentación */}
+        <div className="space-y-4">
+          <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest">Documentación</label>
+          {[
+            { key: "dniFrente", label: "DNI Frente"       },
+            { key: "dniDorso",  label: "DNI Dorso"        },
+            { key: "recibo",    label: "Recibo de Sueldo" },
+          ].map(d => (
+            <button key={d.key} onClick={() => simularUpload(d.key as any)}
+              className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                (archivos as any)[d.key]
+                  ? "bg-green-900/20 border-green-900 text-green-500"
+                  : "bg-black border-gray-800 text-gray-400 hover:border-gray-600"}`}>
+              <span className="font-bold flex items-center gap-2"><FileText size={16}/>{d.label}</span>
+              {(archivos as any)[d.key] ? <CheckCircle2 size={18}/> : <UploadCloud size={18}/>}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── SECCIÓN 2: ONBOARDING DIGITAL ── */}
-      <div>
-        <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
-          <div className="bg-blue-600/20 p-2 rounded-xl text-blue-400"><Smartphone size={24} /></div>
+      {/* Simulador inline */}
+      {mostrarSim && montoNum > 0 && (
+        <div className="border border-gray-800 rounded-2xl p-5 bg-[#060606] animate-in fade-in duration-300">
+          <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-4">Fondeadores disponibles</p>
+          <SimuladorFinanciero
+            monto={montoNum}
+            cuotas={cuotasNum}
+            scoreCliente={scoreCliente}
+            entidadId={entidadData?.id || ""}
+            operacionId={operacionId || undefined}
+            colorPrimario={colorPrimario}
+            onConfirm={onConfirmarOferta}
+          />
+        </div>
+      )}
+
+      {/* Guardar */}
+      {ok ? (
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-900/10 border border-green-900/40 text-green-400">
+          <CheckCircle2 size={18}/>
           <div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-wide">Onboarding Digital</h2>
-            <p className="text-gray-500 text-xs mt-0.5">El cliente completa DNI, selfie, firma y CBU desde su celular</p>
+            <p className="font-black">Operación guardada</p>
+            <p className="text-xs opacity-70">ID: {operacionId} · Estado: EN_REVISION</p>
           </div>
         </div>
-
-        {!linkGenerado ? (
-          <button
-            onClick={generarLinkOnboarding}
-            disabled={generandoLink || !monto}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-black uppercase tracking-widest py-4 rounded-2xl transition-all flex justify-center items-center gap-2"
-          >
-            {generandoLink ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-            {generandoLink ? "Generando link..." : "Generar Link de Onboarding"}
-          </button>
-        ) : (
-          <div className="space-y-4">
-            {/* Status */}
-            <div className={`p-4 rounded-xl border flex items-center gap-3 ${onboardingCompleto ? "bg-green-900/20 border-green-800" : "bg-blue-900/20 border-blue-800"}`}>
-              {onboardingCompleto
-                ? <CheckCircle2 size={18} className="text-green-400" />
-                : <Loader2 size={18} className="text-blue-400 animate-spin" />}
-              <p className="text-sm font-bold text-gray-300">
-                {onboardingCompleto ? "¡El cliente completó el onboarding!" : "Esperando que el cliente complete el formulario..."}
-              </p>
-            </div>
-
-            {/* Link */}
-            <div className="bg-[#111] border border-gray-700 rounded-xl p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Link generado (expira en 72hs)</p>
-              <p className="text-xs text-gray-300 font-mono break-all">{linkGenerado}</p>
-            </div>
-
-            {/* Acciones del link */}
-            <div className="grid grid-cols-3 gap-3">
-              <button onClick={copiarLink}
-                className="flex flex-col items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white py-3 px-4 rounded-xl text-xs font-bold transition-colors">
-                {linkCopiado ? <CheckCircle2 size={18} className="text-green-400" /> : <Copy size={18} />}
-                {linkCopiado ? "Copiado!" : "Copiar"}
-              </button>
-
-              <button onClick={enviarWhatsApp}
-                className="flex flex-col items-center gap-2 bg-green-700 hover:bg-green-600 text-white py-3 px-4 rounded-xl text-xs font-bold transition-colors">
-                <Send size={18} />
-                WhatsApp
-              </button>
-
-              <button onClick={generarLinkOnboarding}
-                className="flex flex-col items-center gap-2 bg-gray-900 hover:bg-gray-800 text-gray-400 py-3 px-4 rounded-xl text-xs font-bold transition-colors">
-                <RefreshCw size={18} />
-                Nuevo link
-              </button>
-            </div>
-
-            {/* Abrir en nueva pestaña */}
-            <a href={linkGenerado} target="_blank" rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">
-              <ExternalLink size={14} /> Ver formulario del cliente
-            </a>
-          </div>
-        )}
-      </div>
-
-      {/* ── SECCIÓN 3: GENERAR CAD ── */}
-      <div className="pt-4 border-t border-gray-800">
-        <button
-          onClick={generarCAD}
-          disabled={!monto || generandoPdf}
-          className="w-full bg-[#FF5E14] hover:bg-[#E04D0B] disabled:bg-gray-800 disabled:text-gray-500 text-white font-black uppercase tracking-widest py-5 rounded-2xl transition-all flex justify-center items-center gap-2 text-lg"
-        >
-          {generandoPdf ? <Loader2 className="animate-spin" size={24} /> : <FileText size={24} />}
-          {generandoPdf ? "Generando CAD..." : "Generar CAD con Firma Digital"}
+      ) : (
+        <button onClick={guardarOperacion}
+          disabled={!montoNum || !ofertaConfirmada || guardando}
+          className="w-full py-4 rounded-2xl font-black text-white flex items-center justify-center gap-2 transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ backgroundColor: colorPrimario }}>
+          {guardando
+            ? <><Loader2 size={16} className="animate-spin"/> Guardando...</>
+            : <><Save size={16}/> {!ofertaConfirmada ? "Confirmar fondeador primero" : "Guardar Operación"}</>}
         </button>
-        {!linkGenerado && (
-          <p className="text-center text-xs text-gray-600 mt-2">
-            Podés generar el CAD ahora o esperar a que el cliente complete el onboarding para incluir su firma.
-          </p>
-        )}
-      </div>
-
+      )}
     </div>
   );
 }
