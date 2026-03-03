@@ -8,6 +8,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import CertificadosWidget from "@/components/CertificadosWidget";
+import ScoringWidget from "@/components/ScoringWidget";
 import {
   ArrowLeft, User, DollarSign, Calendar, FileText,
   CheckCircle2, AlertTriangle, Clock, Loader2,
@@ -244,6 +245,12 @@ export default function DetalleOperacionPage() {
               ))}
             </div>
           </div>
+
+          {/* Scoring */}
+          <ScoringWidget
+            operacionId={id}
+            scoringActual={op.scoring?.puntaje ? op.scoring : undefined}
+          />
 
           {/* Certificados */}
           <CertificadosWidget
