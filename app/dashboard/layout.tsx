@@ -52,6 +52,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Política de Mora",        ruta: "/dashboard/configuracion/mora",          visible: puedeConfigurar },
     { nombre: "Campos Onboarding",        ruta: "/dashboard/configuracion/onboarding",    visible: puedeConfigurar },
     { nombre: "Scoring Crediticio",        ruta: "/dashboard/configuracion/scoring",       visible: puedeConfigurar },
+    { nombre: "Portal del Cliente",         ruta: "/dashboard/configuracion/portal",        visible: puedeConfigurar },
     { nombre: "Reportes",                 ruta: "/dashboard/reportes",                    visible: puedeConfigurar },
   ];
 
