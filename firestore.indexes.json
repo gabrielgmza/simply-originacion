@@ -439,16 +439,6 @@
           "order": "DESCENDING"
         }
       ]
-    },
-    {
-      "collectionGroup": "entidades",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "slug",
-          "order": "ASCENDING"
-        }
-      ]
     }
   ],
   "fieldOverrides": []
