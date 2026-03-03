@@ -1,377 +1,325 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
+  Tooltip, ResponsiveContainer
 } from "recharts";
 import {
-  Download, TrendingUp, Users, AlertTriangle,
-  CheckCircle2, XCircle, Loader2, Calendar, FileText
+  Download, Loader2, Filter, TrendingUp,
+  DollarSign, AlertTriangle, Building2
 } from "lucide-react";
-import * as XLSX from "xlsx";
 
-// ─── TIPOS ────────────────────────────────────────────────────────────────────
-interface Operacion {
-  id: string;
-  estado: string;
-  estadoAprobacion?: string;
-  vendedorId?: string;
-  sucursalId?: string;
-  financiero?: { montoSolicitado?: number; cuotas?: number; valorCuota?: number };
-  cliente?: { nombre?: string; dni?: string };
-  fechaCreacion?: any;
-  cobranzas?: { diasMora?: number };
-}
+const fmt = (n: number) =>
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M`
+  : n >= 1_000   ? `$${(n / 1_000).toFixed(0)}K`
+  : `$${n}`;
 
-interface Usuario {
-  id: string;
-  nombre?: string;
-  email?: string;
-  rol?: string;
-  sucursalId?: string;
-  comisionPorcentaje?: number;
-}
+const ESTADOS = ["todos","LIQUIDADO","EN_MORA","FINALIZADO","APROBADO","RECHAZADO","EN_REVISION"];
+const PIE_COLORS = ["#FF5E14","#3b82f6","#22c55e","#ef4444","#a855f7","#f59e0b","#6b7280"];
 
-type Periodo = "7d" | "30d" | "90d" | "todo";
-
-const COLORES_GRAFICOS = ["#FF5E14", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899"];
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function metricCard(label: string, valor: string | number, icono: React.ReactNode, color: string) {
-  return (
-    <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-5">
-      <div className="mb-2" style={{ color }}>{icono}</div>
-      <p className="text-2xl font-black text-white">{valor}</p>
-      <p className="text-xs text-gray-500 mt-1">{label}</p>
-    </div>
-  );
-}
-
-// ─── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────────
 export default function ReportesPage() {
   const { entidadData } = useAuth();
-  const [ops, setOps] = useState<Operacion[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [periodo, setPeriodo] = useState<Periodo>("30d");
-  const [sucursalFiltro, setSucursalFiltro] = useState("TODAS");
-
   const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
 
-  // ── Cargar datos ──
+  const [ops,        setOps]        = useState<any[]>([]);
+  const [sucursales, setSucursales]  = useState<any[]>([]);
+  const [usuarios,   setUsuarios]   = useState<any[]>([]);
+  const [cargando,   setCargando]   = useState(true);
+  const [exportando, setExportando] = useState(false);
+
+  const [desde,       setDesde]       = useState("");
+  const [hasta,       setHasta]       = useState("");
+  const [sucFiltro,   setSucFiltro]   = useState("todas");
+  const [estadoFiltro,setEstadoFiltro]= useState("todos");
+
   useEffect(() => {
     const cargar = async () => {
       if (!entidadData?.id) return;
-      setLoading(true);
+      setCargando(true);
       try {
-        const [opsSnap, usersSnap] = await Promise.all([
+        const [opsSnap, sucSnap, usersSnap] = await Promise.all([
           getDocs(query(collection(db, "operaciones"), where("entidadId", "==", entidadData.id))),
-          getDocs(query(collection(db, "usuarios"), where("entidadId", "==", entidadData.id))),
+          getDocs(query(collection(db, "sucursales"),  where("entidadId", "==", entidadData.id))),
+          getDocs(query(collection(db, "usuarios"),    where("entidadId", "==", entidadData.id))),
         ]);
-        setOps(opsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Operacion)));
-        setUsuarios(usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as Usuario)));
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+        setOps(opsSnap.docs.map(d => ({
+          id: d.id, ...d.data(),
+          _fecha: d.data().fechaCreacion?.toDate?.() || null,
+        })));
+        setSucursales(sucSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setUsuarios(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } finally { setCargando(false); }
     };
     cargar();
   }, [entidadData]);
 
-  // ── Filtrar por período ──
+  const sucMap  = useMemo(() => Object.fromEntries(sucursales.map(s => [s.id, s.nombre])), [sucursales]);
+  const userMap = useMemo(() => Object.fromEntries(usuarios.map(u => [u.id, u.nombre || u.email])), [usuarios]);
+
   const opsFiltradas = useMemo(() => {
-    const ahora = new Date();
-    const diasMap: Record<Periodo, number> = { "7d": 7, "30d": 30, "90d": 90, "todo": 99999 };
-    const diasAtras = diasMap[periodo];
-    const desde = new Date(ahora.getTime() - diasAtras * 24 * 60 * 60 * 1000);
-
-    return ops.filter(op => {
-      const fecha = op.fechaCreacion?.toDate?.() || new Date(op.fechaCreacion || 0);
-      const matchPeriodo = fecha >= desde;
-      const matchSucursal = sucursalFiltro === "TODAS" || op.sucursalId === sucursalFiltro;
-      return matchPeriodo && matchSucursal;
+    const desdeD = desde ? new Date(desde)               : null;
+    const hastaD = hasta ? new Date(hasta + "T23:59:59")  : null;
+    return ops.filter(o => {
+      if (desdeD && o._fecha && o._fecha < desdeD) return false;
+      if (hastaD && o._fecha && o._fecha > hastaD) return false;
+      if (sucFiltro    !== "todas" && o.sucursalId !== sucFiltro)    return false;
+      if (estadoFiltro !== "todos" && o.estado     !== estadoFiltro) return false;
+      return true;
     });
-  }, [ops, periodo, sucursalFiltro]);
+  }, [ops, desde, hasta, sucFiltro, estadoFiltro]);
 
-  // ── Métricas globales ──
-  const totalMonto = opsFiltradas.reduce((a, o) => a + (o.financiero?.montoSolicitado || 0), 0);
-  const totalOps = opsFiltradas.length;
-  const aprobadas = opsFiltradas.filter(o => ["APROBADO", "LIQUIDADO", "FINALIZADO"].includes(o.estado)).length;
-  const rechazadas = opsFiltradas.filter(o => o.estado === "RECHAZADO").length;
-  const enMora = opsFiltradas.filter(o => o.estado === "EN_MORA").length;
-  const tasaAprobacion = totalOps > 0 ? Math.round((aprobadas / totalOps) * 100) : 0;
-
-  // ── Operaciones por vendedor ──
-  const porVendedor = useMemo(() => {
-    const mapa: Record<string, { nombre: string; ops: number; monto: number; comision: number }> = {};
-    opsFiltradas.forEach(op => {
-      if (!op.vendedorId) return;
-      const user = usuarios.find(u => u.id === op.vendedorId);
-      const nombre = user?.nombre || user?.email?.split("@")[0] || op.vendedorId.slice(0, 8);
-      const monto = op.financiero?.montoSolicitado || 0;
-      const comisionPorc = user?.comisionPorcentaje || 1;
-      if (!mapa[op.vendedorId]) mapa[op.vendedorId] = { nombre, ops: 0, monto: 0, comision: 0 };
-      mapa[op.vendedorId].ops += 1;
-      mapa[op.vendedorId].monto += monto;
-      mapa[op.vendedorId].comision += monto * (comisionPorc / 100);
-    });
-    return Object.values(mapa).sort((a, b) => b.monto - a.monto);
-  }, [opsFiltradas, usuarios]);
-
-  // ── Monto por mes ──
-  const porMes = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    opsFiltradas.forEach(op => {
-      const fecha = op.fechaCreacion?.toDate?.() || new Date(op.fechaCreacion || 0);
-      const clave = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
-      mapa[clave] = (mapa[clave] || 0) + (op.financiero?.montoSolicitado || 0);
-    });
-    return Object.entries(mapa)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([mes, monto]) => ({ mes: mes.slice(5) + "/" + mes.slice(2, 4), monto }));
+  const kpis = useMemo(() => {
+    const liquidadas = opsFiltradas.filter(o => ["LIQUIDADO","FINALIZADO"].includes(o.estado));
+    const mora       = opsFiltradas.filter(o => o.estado === "EN_MORA");
+    return {
+      totalOps:   opsFiltradas.length,
+      montoTotal: liquidadas.reduce((a, o) => a + (o.financiero?.montoSolicitado || 0), 0),
+      enMora:     mora.length,
+      porcMora:   opsFiltradas.length > 0 ? ((mora.length / opsFiltradas.length) * 100).toFixed(1) : "0",
+    };
   }, [opsFiltradas]);
 
-  // ── Tasa aprobación/rechazo (pie) ──
-  const pieData = [
-    { name: "Aprobadas", value: aprobadas },
-    { name: "Rechazadas", value: rechazadas },
-    { name: "Pendientes", value: totalOps - aprobadas - rechazadas },
-  ].filter(d => d.value > 0);
+  const dataSucursales = useMemo(() => {
+    const lista = [...sucursales, { id: "sin_sucursal", nombre: "Sin asignar" }];
+    return lista.map(s => {
+      const opsSuc = opsFiltradas.filter(o =>
+        s.id === "sin_sucursal" ? !o.sucursalId : o.sucursalId === s.id);
+      const monto  = opsSuc.filter(o => ["LIQUIDADO","FINALIZADO"].includes(o.estado))
+                           .reduce((a, o) => a + (o.financiero?.montoSolicitado || 0), 0);
+      return {
+        nombre: s.nombre,
+        ops:    opsSuc.length,
+        monto:  Math.round(monto / 1000),
+        mora:   opsSuc.filter(o => o.estado === "EN_MORA").length,
+      };
+    }).filter(s => s.ops > 0);
+  }, [opsFiltradas, sucursales]);
 
-  // ── Mora por sucursal ──
-  const moraPorSucursal = useMemo(() => {
-    const mapa: Record<string, number> = {};
-    opsFiltradas.filter(o => o.estado === "EN_MORA").forEach(op => {
-      const suc = op.sucursalId || "Sin sucursal";
-      mapa[suc] = (mapa[suc] || 0) + 1;
-    });
-    return Object.entries(mapa).map(([suc, cant]) => ({ sucursal: suc.slice(0, 12), cant }));
+  const dataEstados = useMemo(() => {
+    const counts: Record<string, number> = {};
+    opsFiltradas.forEach(o => { counts[o.estado] = (counts[o.estado] || 0) + 1; });
+    return Object.entries(counts).map(([estado, valor]) => ({ estado, valor }));
   }, [opsFiltradas]);
 
-  // ── Sucursales disponibles ──
-  const sucursales = useMemo(() => {
-    const set = new Set(ops.map(o => o.sucursalId).filter(Boolean));
-    return Array.from(set) as string[];
-  }, [ops]);
-
-  // ── Exportar Excel ──
-  const exportarExcel = () => {
-    const wb = XLSX.utils.book_new();
-
-    // Hoja 1: Resumen
-    const resumen = [
-      ["Reporte de Producción", entidadData?.nombreFantasia || ""],
-      ["Período", periodo === "todo" ? "Todo el tiempo" : `Últimos ${periodo}`],
-      ["Generado", new Date().toLocaleDateString("es-AR")],
-      [],
-      ["Total Originado", totalMonto],
-      ["Operaciones", totalOps],
-      ["Aprobadas", aprobadas],
-      ["Rechazadas", rechazadas],
-      ["En Mora", enMora],
-      ["Tasa Aprobación", `${tasaAprobacion}%`],
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
-
-    // Hoja 2: Por Vendedor
-    const vendedorRows = [
-      ["Vendedor", "Operaciones", "Monto Originado", "Comisión Estimada"],
-      ...porVendedor.map(v => [v.nombre, v.ops, v.monto, Math.round(v.comision)]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vendedorRows), "Por Vendedor");
-
-    // Hoja 3: Detalle operaciones
-    const detalle = [
-      ["ID", "Cliente", "DNI", "Monto", "Estado", "Vendedor", "Fecha"],
-      ...opsFiltradas.map(op => {
-        const user = usuarios.find(u => u.id === op.vendedorId);
-        return [
-          op.id.slice(0, 8),
-          op.cliente?.nombre || "",
-          op.cliente?.dni || "",
-          op.financiero?.montoSolicitado || 0,
-          op.estado,
-          user?.nombre || user?.email || "",
-          op.fechaCreacion?.toDate?.()?.toLocaleDateString("es-AR") || "",
-        ];
-      }),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detalle), "Detalle");
-
-    // Anchos de columna
-    [wb.Sheets["Por Vendedor"], wb.Sheets["Detalle"]].forEach(ws => {
-      if (ws) ws["!cols"] = [20, 12, 20, 14, 16, 20, 14].map(w => ({ wch: w }));
+  const rankingVendedores = useMemo(() => {
+    const map: Record<string, { nombre: string; sucursal: string; ops: number; monto: number; mora: number }> = {};
+    opsFiltradas.forEach(o => {
+      const vid = o.vendedorId || "—";
+      if (!map[vid]) map[vid] = {
+        nombre:   userMap[vid] || vid.slice(0, 8),
+        sucursal: sucMap[o.sucursalId] || "Sin asignar",
+        ops: 0, monto: 0, mora: 0,
+      };
+      map[vid].ops++;
+      if (["LIQUIDADO","FINALIZADO"].includes(o.estado))
+        map[vid].monto += (o.financiero?.montoSolicitado || 0);
+      if (o.estado === "EN_MORA") map[vid].mora++;
     });
+    return Object.values(map).sort((a, b) => b.monto - a.monto).slice(0, 15);
+  }, [opsFiltradas, userMap, sucMap]);
 
-    XLSX.writeFile(wb, `Reporte_${entidadData?.nombreFantasia}_${new Date().toLocaleDateString("es-AR").replace(/\//g, "-")}.xlsx`);
+  const exportarExcel = async () => {
+    if (!entidadData?.id) return;
+    setExportando(true);
+    try {
+      const res = await fetch("/api/reportes/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entidadId: entidadData.id, desde, hasta, sucursalId: sucFiltro, estado: estadoFiltro }),
+      });
+      if (!res.ok) { alert("Error al generar el Excel."); return; }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url; a.download = `reporte-${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } finally { setExportando(false); }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-32">
-      <Loader2 className="animate-spin text-gray-500" size={36} />
-    </div>
+  if (cargando) return (
+    <div className="flex justify-center py-32"><Loader2 className="animate-spin text-gray-600" size={28}/></div>
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
 
-      {/* ENCABEZADO */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* HEADER */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Reportes</h1>
-          <p className="text-gray-500 text-sm mt-1">Producción y desempeño de tu entidad</p>
+          <p className="text-gray-500 text-sm mt-0.5">{opsFiltradas.length} operaciones en el período</p>
         </div>
-        <button onClick={exportarExcel}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 border border-gray-700 text-white text-sm font-bold rounded-xl transition-colors">
-          <Download size={16} /> Exportar Excel
+        <button onClick={exportarExcel} disabled={exportando || opsFiltradas.length === 0}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl text-white font-bold text-sm transition-all hover:opacity-90 disabled:opacity-40"
+          style={{ backgroundColor: colorPrimario }}>
+          {exportando ? <Loader2 size={15} className="animate-spin"/> : <Download size={15}/>}
+          Exportar Excel
         </button>
       </div>
 
       {/* FILTROS */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          {(["7d", "30d", "90d", "todo"] as Periodo[]).map(p => (
-            <button key={p} onClick={() => setPeriodo(p)}
-              className={`px-4 py-2 text-xs font-bold transition-colors ${
-                periodo === p ? "text-white" : "text-gray-500 hover:text-gray-300"
-              }`}
-              style={periodo === p ? { backgroundColor: colorPrimario } : {}}>
-              {p === "7d" ? "7 días" : p === "30d" ? "30 días" : p === "90d" ? "90 días" : "Todo"}
-            </button>
-          ))}
-        </div>
-        {sucursales.length > 0 && (
-          <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)}
-            className="bg-gray-900 border border-gray-800 text-gray-300 text-xs font-bold rounded-xl px-4 py-2 focus:outline-none">
-            <option value="TODAS">Todas las sucursales</option>
-            {sucursales.map(s => <option key={s} value={s}>{s}</option>)}
+      <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-4 flex flex-wrap gap-4 items-end">
+        <Filter size={14} className="text-gray-500 shrink-0 mb-1"/>
+        {[
+          { label: "Desde", value: desde, set: setDesde, type: "date" },
+          { label: "Hasta", value: hasta, set: setHasta, type: "date" },
+        ].map(f => (
+          <div key={f.label}>
+            <label className="block text-[10px] text-gray-600 uppercase font-bold mb-1">{f.label}</label>
+            <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)}
+              className="bg-[#111] border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none"/>
+          </div>
+        ))}
+        <div>
+          <label className="block text-[10px] text-gray-600 uppercase font-bold mb-1">Sucursal</label>
+          <select value={sucFiltro} onChange={e => setSucFiltro(e.target.value)}
+            className="bg-[#111] border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none">
+            <option value="todas">Todas</option>
+            {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-gray-600 uppercase font-bold mb-1">Estado</label>
+          <select value={estadoFiltro} onChange={e => setEstadoFiltro(e.target.value)}
+            className="bg-[#111] border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none">
+            {ESTADOS.map(e => <option key={e} value={e}>{e === "todos" ? "Todos" : e.replace(/_/g," ")}</option>)}
+          </select>
+        </div>
+        {(desde || hasta || sucFiltro !== "todas" || estadoFiltro !== "todos") && (
+          <button onClick={() => { setDesde(""); setHasta(""); setSucFiltro("todas"); setEstadoFiltro("todos"); }}
+            className="text-xs text-gray-500 hover:text-white underline mb-1">
+            Limpiar
+          </button>
         )}
       </div>
 
-      {/* MÉTRICAS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {metricCard("Monto Originado", `$${(totalMonto / 1000).toFixed(0)}K`, <TrendingUp size={20} />, colorPrimario)}
-        {metricCard("Operaciones", totalOps, <FileText size={20} />, "#3b82f6")}
-        {metricCard("Aprobadas", aprobadas, <CheckCircle2 size={20} />, "#22c55e")}
-        {metricCard("Rechazadas", rechazadas, <XCircle size={20} />, "#ef4444")}
-        {metricCard("En Mora", enMora, <AlertTriangle size={20} />, "#f59e0b")}
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Operaciones",    valor: kpis.totalOps,        color: "text-white",    icon: <TrendingUp size={16}/> },
+          { label: "Monto liquidado",valor: fmt(kpis.montoTotal), color: "text-green-400", icon: <DollarSign size={16}/> },
+          { label: "En mora",        valor: kpis.enMora,          color: kpis.enMora > 0 ? "text-red-400" : "text-gray-600", icon: <AlertTriangle size={16}/> },
+          { label: "% Mora",         valor: `${kpis.porcMora}%`,  color: parseFloat(kpis.porcMora) > 5 ? "text-orange-400" : "text-gray-400", icon: <Building2 size={16}/> },
+        ].map((k, i) => (
+          <div key={i} className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-4">
+            <div className={`mb-2 ${k.color}`}>{k.icon}</div>
+            <p className={`text-2xl font-black ${k.color}`}>{k.valor}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">{k.label}</p>
+          </div>
+        ))}
       </div>
 
-      {/* TASA APROBACIÓN */}
-      <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-5">
-        <div className="flex justify-between items-center mb-2">
-          <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Tasa de aprobación</p>
-          <p className="text-lg font-black text-white">{tasaAprobacion}%</p>
-        </div>
-        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${tasaAprobacion}%`, backgroundColor: colorPrimario }} />
-        </div>
-      </div>
+      {/* GRÁFICOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* GRÁFICO: MONTO POR MES */}
-        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6">
-          <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">Monto originado por mes</p>
-          {porMes.length === 0 ? (
-            <p className="text-gray-600 text-sm text-center py-8">Sin datos</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={porMes}>
-                <XAxis dataKey="mes" tick={{ fill: "#6b7280", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
-                <Tooltip
-                  contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 8 }}
-                  formatter={(v: number) => [`$${v.toLocaleString("es-AR")}`, "Monto"]}
-                />
-                <Bar dataKey="monto" fill={colorPrimario} radius={[4, 4, 0, 0]} />
+        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-4">Operaciones por sucursal</p>
+          {dataSucursales.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dataSucursales} margin={{ left: -10 }}>
+                <XAxis dataKey="nombre" tick={{ fill: "#6b7280", fontSize: 10 }}/>
+                <YAxis tick={{ fill: "#6b7280", fontSize: 10 }}/>
+                <Tooltip contentStyle={{ backgroundColor: "#111", border: "1px solid #374151", borderRadius: 8 }}
+                  labelStyle={{ color: "#fff" }} itemStyle={{ color: "#9ca3af" }}/>
+                <Bar dataKey="ops"  name="Ops"  fill={colorPrimario} radius={[4,4,0,0]}/>
+                <Bar dataKey="mora" name="Mora" fill="#ef4444"       radius={[4,4,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
-          )}
+          ) : <p className="text-gray-600 text-sm text-center py-16">Sin datos</p>}
         </div>
 
-        {/* GRÁFICO: PIE APROBACIÓN */}
-        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6">
-          <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">Distribución de estados</p>
-          {pieData.length === 0 ? (
-            <p className="text-gray-600 text-sm text-center py-8">Sin datos</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
+        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-4">Distribución por estado</p>
+          {dataEstados.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  {pieData.map((_, i) => <Cell key={i} fill={COLORES_GRAFICOS[i % COLORES_GRAFICOS.length]} />)}
+                <Pie data={dataEstados} dataKey="valor" nameKey="estado"
+                  cx="50%" cy="50%" outerRadius={80} innerRadius={40}
+                  label={({ estado, percent }) => `${(percent*100).toFixed(0)}%`}
+                  labelLine={false}>
+                  {dataEstados.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]}/>)}
                 </Pie>
-                <Tooltip contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 8 }} />
+                <Tooltip formatter={(v: any, name: any) => [v, name?.replace(/_/g," ")]}
+                  contentStyle={{ backgroundColor: "#111", border: "1px solid #374151", borderRadius: 8 }}
+                  itemStyle={{ color: "#9ca3af" }}/>
               </PieChart>
             </ResponsiveContainer>
-          )}
+          ) : <p className="text-gray-600 text-sm text-center py-16">Sin datos</p>}
         </div>
 
-        {/* MORA POR SUCURSAL */}
-        {moraPorSucursal.length > 0 && (
-          <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6">
-            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">Mora por sucursal</p>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={moraPorSucursal} layout="vertical">
-                <XAxis type="number" tick={{ fill: "#6b7280", fontSize: 11 }} />
-                <YAxis dataKey="sucursal" type="category" tick={{ fill: "#6b7280", fontSize: 11 }} width={90} />
-                <Tooltip contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 8 }} />
-                <Bar dataKey="cant" fill="#ef4444" radius={[0, 4, 4, 0]} />
+        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-4">Monto liquidado por sucursal ($K)</p>
+          {dataSucursales.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dataSucursales} margin={{ left: -10 }}>
+                <XAxis dataKey="nombre" tick={{ fill: "#6b7280", fontSize: 10 }}/>
+                <YAxis tick={{ fill: "#6b7280", fontSize: 10 }}/>
+                <Tooltip formatter={(v: any) => [`$${v}K`, "Monto"]}
+                  contentStyle={{ backgroundColor: "#111", border: "1px solid #374151", borderRadius: 8 }}
+                  labelStyle={{ color: "#fff" }} itemStyle={{ color: "#9ca3af" }}/>
+                <Bar dataKey="monto" name="Monto ($K)" fill="#22c55e" radius={[4,4,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          ) : <p className="text-gray-600 text-sm text-center py-16">Sin datos</p>}
+        </div>
 
-        {/* OPS POR VENDEDOR (gráfico) */}
-        {porVendedor.length > 0 && (
-          <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6">
-            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-4">Producción por vendedor</p>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={porVendedor.slice(0, 6)} layout="vertical">
-                <XAxis type="number" tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
-                <YAxis dataKey="nombre" type="category" tick={{ fill: "#6b7280", fontSize: 11 }} width={80} />
-                <Tooltip contentStyle={{ background: "#111", border: "1px solid #333", borderRadius: 8 }}
-                  formatter={(v: number) => [`$${v.toLocaleString("es-AR")}`, "Monto"]} />
-                <Bar dataKey="monto" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-5">
+          <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-4">Top 5 vendedores</p>
+          {rankingVendedores.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={rankingVendedores.slice(0,5)} layout="vertical" margin={{ left: 10 }}>
+                <XAxis type="number" tick={{ fill: "#6b7280", fontSize: 10 }}/>
+                <YAxis type="category" dataKey="nombre" width={90} tick={{ fill: "#9ca3af", fontSize: 10 }}/>
+                <Tooltip formatter={(v: any) => [fmt(v), "Monto"]}
+                  contentStyle={{ backgroundColor: "#111", border: "1px solid #374151", borderRadius: 8 }}
+                  labelStyle={{ color: "#fff" }} itemStyle={{ color: "#9ca3af" }}/>
+                <Bar dataKey="monto" fill="#a855f7" radius={[0,4,4,0]}/>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          ) : <p className="text-gray-600 text-sm text-center py-16">Sin datos</p>}
+        </div>
       </div>
 
-      {/* TABLA: RANKING VENDEDORES CON COMISIONES */}
-      {porVendedor.length > 0 && (
-        <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-800">
-            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Ranking de Vendedores</p>
-          </div>
-          <table className="w-full text-left">
-            <thead className="border-b border-gray-900">
+      {/* TABLA RANKING */}
+      <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800">
+          <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Ranking de vendedores</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-white/[0.02]">
               <tr>
-                {["#", "Vendedor", "Operaciones", "Monto Originado", "Comisión Estimada"].map(h => (
-                  <th key={h} className="px-6 py-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">{h}</th>
+                {["#","Vendedor","Sucursal","Ops","Monto liquidado","En mora"].map(h => (
+                  <th key={h} className="px-5 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-900">
-              {porVendedor.map((v, i) => (
-                <tr key={v.nombre} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-6 py-4 text-gray-500 font-bold text-sm">{i + 1}</td>
-                  <td className="px-6 py-4 font-bold text-white text-sm">{v.nombre}</td>
-                  <td className="px-6 py-4 text-sm text-gray-300">{v.ops}</td>
-                  <td className="px-6 py-4 font-bold text-white">${v.monto.toLocaleString("es-AR")}</td>
-                  <td className="px-6 py-4 text-sm" style={{ color: colorPrimario }}>
-                    ${Math.round(v.comision).toLocaleString("es-AR")}
+              {rankingVendedores.map((v, i) => (
+                <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="px-5 py-3 font-black text-gray-600">#{i+1}</td>
+                  <td className="px-5 py-3 font-bold text-white">{v.nombre}</td>
+                  <td className="px-5 py-3 text-gray-400">{v.sucursal}</td>
+                  <td className="px-5 py-3 font-bold text-white">{v.ops}</td>
+                  <td className="px-5 py-3 font-bold text-green-400">{fmt(v.monto)}</td>
+                  <td className="px-5 py-3">
+                    {v.mora > 0
+                      ? <span className="text-red-400 font-bold">{v.mora}</span>
+                      : <span className="text-gray-600">—</span>}
                   </td>
                 </tr>
               ))}
+              {rankingVendedores.length === 0 && (
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-600">Sin datos</td></tr>
+              )}
             </tbody>
           </table>
         </div>
-      )}
+      </div>
 
     </div>
   );
