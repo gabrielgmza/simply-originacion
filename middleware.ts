@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth/session";
 
 const RUTAS_PROTEGIDAS: Record<string, string[] | null> = {
   "/admin":                               ["MASTER_PAYSUR"],
+  "/admin/onboarding":                    ["MASTER_PAYSUR"],
+  "/admin/entidades":                     ["MASTER_PAYSUR"],
   "/fondeador":                           ["FONDEADOR"],
   "/dashboard/configuracion":             ["GERENTE_GENERAL", "MASTER_PAYSUR"],
   "/dashboard/entidades":                 ["MASTER_PAYSUR"],
@@ -33,7 +35,6 @@ const RUTAS_PUBLICAS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Siempre permitir rutas públicas y TODAS las API routes
   if (RUTAS_PUBLICAS.some(p => pathname.startsWith(p))) {
     return NextResponse.next();
   }
@@ -80,5 +81,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$).*)" ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$).*)"],
 };
