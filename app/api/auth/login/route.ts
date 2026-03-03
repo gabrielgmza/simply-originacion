@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { adminDb } from "@/lib/firebase-admin";
 import { setSessionCookie } from "@/lib/auth/session";
 
 const DESTINOS: Record<string, string> = {
@@ -18,11 +17,11 @@ export async function POST(request: NextRequest) {
     const { uid } = await request.json();
     if (!uid) return NextResponse.json({ error: "Falta uid" }, { status: 400 });
 
-    const snap = await getDoc(doc(db, "usuarios", uid));
-    if (!snap.exists())
+    const snap = await adminDb.collection("usuarios").doc(uid).get();
+    if (!snap.exists)
       return NextResponse.json({ error: "Usuario sin perfil asignado." }, { status: 403 });
 
-    const userData = snap.data();
+    const userData = snap.data()!;
     if (!userData.activo)
       return NextResponse.json({ error: "Tu cuenta esta inactiva." }, { status: 403 });
 
