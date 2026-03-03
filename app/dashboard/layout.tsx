@@ -36,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Nuevo Legajo",          ruta: "/dashboard/originador/legajo",    visible: true },
     { nombre: "Panel de Aprobacion",   ruta: "/dashboard/aprobacion",           visible: puedeAprobar },
     { nombre: "Liquidacion",           ruta: "/dashboard/liquidacion",          visible: puedeLiquidar },
+    { nombre: "Renovaciones",              ruta: "/dashboard/renovaciones",                visible: ["GERENTE_GENERAL","GERENTE_SUCURSAL","VENDEDOR","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
     { nombre: "Pagos 360",                  ruta: "/dashboard/pagos360",                    visible: ["GERENTE_GENERAL","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
     { nombre: "Liquidación Masiva",         ruta: "/dashboard/liquidacion/masiva",          visible: ["GERENTE_GENERAL","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
     { nombre: "Revisión Onboarding",    ruta: "/dashboard/revision",                    visible: ["GERENTE_GENERAL","GERENTE_SUCURSAL","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
