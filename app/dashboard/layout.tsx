@@ -48,6 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Marca",                 ruta: "/dashboard/configuracion/marca",  visible: puedeConfigurar },
     { nombre: "WhatsApp",              ruta: "/dashboard/configuracion/whatsapp", visible: puedeConfigurar },
     { nombre: "Notificaciones",        ruta: "/dashboard/configuracion/notificaciones", visible: puedeConfigurar },
+    { nombre: "Política de Mora",        ruta: "/dashboard/configuracion/mora",          visible: puedeConfigurar },
   ];
 
   const iconos: Record<string, React.ReactNode> = {
