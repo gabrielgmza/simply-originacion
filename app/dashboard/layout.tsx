@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import ImpersonacionBanner from "@/components/ImpersonacionBanner";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -141,7 +142,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar />
+        <ImpersonacionBanner />
+      <Navbar />
         <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
       </div>
 
