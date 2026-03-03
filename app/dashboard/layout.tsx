@@ -36,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Nuevo Legajo",          ruta: "/dashboard/originador/legajo",    visible: true },
     { nombre: "Panel de Aprobacion",   ruta: "/dashboard/aprobacion",           visible: puedeAprobar },
     { nombre: "Liquidacion",           ruta: "/dashboard/liquidacion",          visible: puedeLiquidar },
+    { nombre: "Revisión Onboarding",    ruta: "/dashboard/revision",                    visible: ["GERENTE_GENERAL","GERENTE_SUCURSAL","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
     { nombre: "Cartera Activa",        ruta: "/dashboard/cartera",              visible: true },
     { nombre: "Simulador",             ruta: "/dashboard/simulador",            visible: true },
     { nombre: "Sucursales",            ruta: "/dashboard/sucursales",           visible: puedeConfigurar },
