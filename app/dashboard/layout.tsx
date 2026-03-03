@@ -36,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Nuevo Legajo",          ruta: "/dashboard/originador/legajo",    visible: true },
     { nombre: "Panel de Aprobacion",   ruta: "/dashboard/aprobacion",           visible: puedeAprobar },
     { nombre: "Liquidacion",           ruta: "/dashboard/liquidacion",          visible: puedeLiquidar },
+    { nombre: "Liquidación Masiva",         ruta: "/dashboard/liquidacion/masiva",          visible: ["GERENTE_GENERAL","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
     { nombre: "Revisión Onboarding",    ruta: "/dashboard/revision",                    visible: ["GERENTE_GENERAL","GERENTE_SUCURSAL","LIQUIDADOR","MASTER_PAYSUR"].includes(userData?.rol || "") },
     { nombre: "Cartera Activa",        ruta: "/dashboard/cartera",              visible: true },
     { nombre: "Simulador",             ruta: "/dashboard/simulador",            visible: true },
@@ -53,6 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { nombre: "Campos Onboarding",        ruta: "/dashboard/configuracion/onboarding",    visible: puedeConfigurar },
     { nombre: "Scoring Crediticio",        ruta: "/dashboard/configuracion/scoring",       visible: puedeConfigurar },
     { nombre: "Portal del Cliente",         ruta: "/dashboard/configuracion/portal",        visible: puedeConfigurar },
+    { nombre: "Liquidación Masiva",         ruta: "/dashboard/configuracion/liquidacion",    visible: puedeConfigurar },
     { nombre: "Fondeadores",                 ruta: "/dashboard/configuracion/fondeadores",   visible: puedeConfigurar },
     { nombre: "Reportes",                 ruta: "/dashboard/reportes",                    visible: puedeConfigurar },
   ];
