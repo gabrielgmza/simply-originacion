@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/mora",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/cobros-pagos360",
+      "schedule": "0 12 * * *"
     }
   ]
 }
