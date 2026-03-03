@@ -1,0 +1,455 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "vendedorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sucursalId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaLiquidacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cliente.dni",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cobranzas.diasMora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "rol",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "rol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "operacionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sucursales",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activa",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fondeadores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "magic_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "operacionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usado",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "logs_operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "operacionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "logs_operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "logs_cobranzas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "operacionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaGestion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "logs_emails",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "logs_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "leadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "logs_pagos360",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "renovaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notificaciones_internas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "usuarioId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "leida",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notificaciones_internas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "subastas_fondeo",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "scoring_resultados",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entidadId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCreacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "entidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "slug",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

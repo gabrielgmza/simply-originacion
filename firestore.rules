@@ -1,0 +1,210 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+    function uid() {
+      return request.auth.uid;
+    }
+    function getUserData() {
+      return get(/databases/$(database)/documents/usuarios/$(uid())).data;
+    }
+    function rol() {
+      return getUserData().rol;
+    }
+    function entidadId() {
+      return getUserData().entidadId;
+    }
+    function esMaster() {
+      return isAuth() && rol() == 'MASTER_PAYSUR';
+    }
+    function esGerente() {
+      return isAuth() && rol() in ['GERENTE_GENERAL', 'GERENTE_SUCURSAL'];
+    }
+    function esStaffEntidad(eid) {
+      return isAuth() && entidadId() == eid;
+    }
+    function esGerenteEntidad(eid) {
+      return isAuth() && entidadId() == eid && rol() in ['GERENTE_GENERAL', 'GERENTE_SUCURSAL'];
+    }
+    function esGerenteGeneral() {
+      return isAuth() && rol() == 'GERENTE_GENERAL';
+    }
+
+    // ── entidades ─────────────────────────────────────────────────────────────
+    // Lectura pública limitada para el simulador (solo slug + config pública via API route)
+    // En cliente directo: staff lee su entidad, master lee todas
+    match /entidades/{eid} {
+      allow read:   if esMaster() || esStaffEntidad(eid);
+      allow create: if esMaster();
+      allow update: if esMaster() || esGerenteEntidad(eid);
+      allow delete: if esMaster();
+    }
+
+    // ── usuarios ──────────────────────────────────────────────────────────────
+    match /usuarios/{userId} {
+      allow read:   if esMaster()
+                    || uid() == userId
+                    || (esGerente() && resource.data.entidadId == entidadId());
+      allow create: if esMaster() || esGerente();
+      allow update: if esMaster()
+                    || uid() == userId
+                    || esGerenteEntidad(resource.data.entidadId);
+      allow delete: if esMaster() || esGerenteEntidad(resource.data.entidadId);
+    }
+
+    // ── sucursales ────────────────────────────────────────────────────────────
+    match /sucursales/{sucId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow write:  if esMaster() || esGerenteEntidad(resource.data.entidadId);
+    }
+
+    // ── operaciones ───────────────────────────────────────────────────────────
+    match /operaciones/{opId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth()
+                    && rol() in ['VENDEDOR', 'GERENTE_GENERAL', 'GERENTE_SUCURSAL']
+                    && request.resource.data.entidadId == entidadId();
+      allow update: if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow delete: if esMaster();
+    }
+
+    // ── leads ─────────────────────────────────────────────────────────────────
+    // create es público: lo hace el simulador sin autenticación
+    match /leads/{leadId} {
+      allow create: if true;
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow update: if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow delete: if esMaster();
+    }
+
+    // ── pagos ─────────────────────────────────────────────────────────────────
+    match /pagos/{pagoId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth() && esStaffEntidad(request.resource.data.entidadId);
+      allow update: if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow delete: if esMaster();
+    }
+
+    // ── recibos ───────────────────────────────────────────────────────────────
+    match /recibos/{reciboId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update: if esMaster();
+      allow delete: if esMaster();
+    }
+
+    // ── fondeadores ───────────────────────────────────────────────────────────
+    match /fondeadores/{fondId} {
+      allow read:   if esMaster()
+                    || esStaffEntidad(resource.data.entidadId)
+                    || (isAuth() && rol() == 'FONDEADOR' && uid() == resource.data.uid);
+      allow write:  if esMaster() || esGerenteEntidad(resource.data.entidadId);
+    }
+
+    // ── magic_links ───────────────────────────────────────────────────────────
+    // Lectura y update públicos: el cliente accede sin auth para validar y firmar
+    match /magic_links/{token} {
+      allow read:   if true;
+      allow create: if isAuth();
+      allow update: if true;
+      allow delete: if esMaster();
+    }
+
+    // ── credenciales (CUAD / gobierno) ────────────────────────────────────────
+    // Colección sensible: solo master y gerente general de la entidad
+    match /credenciales/{credId} {
+      allow read:   if esMaster()
+                    || (isAuth() && esGerenteGeneral() && entidadId() == resource.data.entidadId);
+      allow write:  if esMaster()
+                    || (isAuth() && esGerenteGeneral() && entidadId() == resource.data.entidadId);
+    }
+
+    // ── renovaciones ──────────────────────────────────────────────────────────
+    match /renovaciones/{renId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth() && esStaffEntidad(request.resource.data.entidadId);
+      allow update: if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow delete: if esMaster();
+    }
+
+    // ── certificados ──────────────────────────────────────────────────────────
+    match /certificados/{certId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+
+    // ── scoring_resultados ────────────────────────────────────────────────────
+    match /scoring_resultados/{scId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+
+    // ── notificaciones_internas ───────────────────────────────────────────────
+    match /notificaciones_internas/{notifId} {
+      allow read:   if isAuth()
+                    && (uid() == resource.data.usuarioId
+                        || esGerenteEntidad(resource.data.entidadId)
+                        || esMaster());
+      allow create: if isAuth();
+      allow update: if isAuth() && uid() == resource.data.usuarioId;
+      allow delete: if esMaster();
+    }
+
+    // ── subastas_fondeo ───────────────────────────────────────────────────────
+    match /subastas_fondeo/{subId} {
+      allow read:   if esMaster()
+                    || esStaffEntidad(resource.data.entidadId)
+                    || (isAuth() && rol() == 'FONDEADOR');
+      allow create: if isAuth() && esStaffEntidad(request.resource.data.entidadId);
+      allow update: if esMaster()
+                    || esStaffEntidad(resource.data.entidadId)
+                    || (isAuth() && rol() == 'FONDEADOR');
+      allow delete: if esMaster();
+    }
+
+    // ── portal_fondeador ──────────────────────────────────────────────────────
+    match /portal_fondeador/{sesId} {
+      allow read, update: if isAuth() && uid() == resource.data.uid;
+      allow create: if isAuth();
+      allow delete: if esMaster();
+    }
+
+    // ── logs (solo lectura para staff, escritura abierta a auth) ─────────────
+    match /logs_operaciones/{logId} {
+      allow read:   if esMaster() || esGerenteEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+    match /logs_cobranzas/{logId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth() && esStaffEntidad(request.resource.data.entidadId);
+      allow update, delete: if esMaster();
+    }
+    match /logs_emails/{logId} {
+      allow read:   if esMaster() || esGerenteEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+    match /logs_leads/{logId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+    match /logs_pagos360/{logId} {
+      allow read:   if esMaster() || esGerenteEntidad(resource.data.entidadId);
+      allow create: if true;   // webhook externo sin auth
+      allow update, delete: if esMaster();
+    }
+
+    // ── Denegar todo lo demás ─────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
