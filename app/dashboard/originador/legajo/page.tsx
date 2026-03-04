@@ -203,6 +203,8 @@ export default function NuevoLegajoPage() {
   const [stBcra,    setStBcra]    = useState<"idle"|"procesando"|"ok"|"error">("idle");
   const [stJuicios, setStJuicios] = useState<"idle"|"procesando"|"ok"|"error">("idle");
   const [stCliente, setStCliente] = useState<"idle"|"procesando"|"ok"|"error">("idle");
+  const [cuadData,  setCuadData]  = useState<any>(null);
+  const [stCuad,    setStCuad]    = useState<"idle"|"procesando"|"ok"|"error"|"no_empleado">("idle");
 
   const evaluar = async () => {
     if (dni.length < 7) return;
@@ -224,11 +226,12 @@ export default function NuevoLegajoPage() {
     ]);
 
     let sit = 1;
+    let dniValido = false;
     if (resBcra.status === "fulfilled" && resBcra.value?.success) {
       const b = resBcra.value.bcra;
       setBcra(b);
       sit = parseInt(b?.peorSituacion || "1");
-      if (b?.nombre) setNombreCliente(b.nombre);
+      if (b?.nombre) { setNombreCliente(b.nombre); dniValido = true; }
       setStBcra("ok");
     } else setStBcra("error");
     setSituacion(sit);
@@ -250,6 +253,7 @@ export default function NuevoLegajoPage() {
 
     const maxSit = entidadData?.scoring?.bcraMaxSituacion ?? 2;
     let resultado: ResultadoScoring = "APROBADO";
+    if (!dniValido) resultado = "OBSERVADO"; // DNI no encontrado en BCRA
     if (sit > maxSit) resultado = entidadData?.scoring?.accionBcraExcedido === "RECHAZADO" ? "RECHAZADO" : "OBSERVADO";
     if (tieneJuicios && resultado !== "RECHAZADO") resultado = "OBSERVADO";
     setScoring(resultado);
@@ -260,7 +264,8 @@ export default function NuevoLegajoPage() {
     if (!monto || !producto) return;
     setGuardando(true);
     try {
-      const montoNum  = parseInt(monto) || 0;
+
+  const montoNum  = parseInt(monto) || 0;
       const cuotasNum = parseInt(cuotas) || 12;
       const TEM = ((entidadData?.configuracion?.tasaInteresBase || 80) / 100) / 12;
       const cuota = Math.round((montoNum * TEM * Math.pow(1 + TEM, cuotasNum)) / (Math.pow(1 + TEM, cuotasNum) - 1));
@@ -284,6 +289,27 @@ export default function NuevoLegajoPage() {
     } finally { setGuardando(false); }
   };
 
+  const elegirProducto = async (p: Producto) => {
+    setProducto(p);
+    if (p === "CUAD") {
+      setPaso("analizando");
+      setStCuad("procesando");
+      try {
+        const res = await fetch("https://simply-bot-mendoza-278599265960.us-central1.run.app/api/simular-cupo", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dni, usuario: entidadData?.credencialesCuad?.usuario, password: entidadData?.credencialesCuad?.password }),
+        });
+        const data = await res.json();
+        if (data.noRegistra) { setStCuad("no_empleado"); }
+        else if (data.success) { setCuadData({ maximo: data.cupoMaximo, iteraciones: data.iteraciones }); setStCuad("ok"); }
+        else setStCuad("error");
+      } catch { setStCuad("error"); }
+      setPaso("formulario");
+    } else {
+      setPaso("formulario");
+    }
+  };
+
   const montoNum  = parseInt(monto) || 0;
   const cuotasNum = parseInt(cuotas) || 12;
   const TEM = ((entidadData?.configuracion?.tasaInteresBase || 80) / 100) / 12;
@@ -292,7 +318,7 @@ export default function NuevoLegajoPage() {
     : 0;
 
   const productosDisponibles = [
-    { key: "PRIVADO",  label: "Crédito Personal",   desc: "Préstamo personal con cuotas fijas",   icono: <CreditCard size={22}/>, color: "#3b82f6", visible: true },
+    { key: "PRIVADO",  label: "Crédito Personal",   desc: "Préstamo personal con cuotas fijas",   icono: <CreditCard size={22}/>, color: "#3b82f6", visible: !!modulos.privados },
     { key: "CUAD",     label: "Descuento Haberes",   desc: "Descuento por nómina gobierno",        icono: <Landmark size={22}/>,   color: "#8b5cf6", visible: !!modulos.cuad },
     { key: "ADELANTO", label: "Adelanto de Sueldo",  desc: "Anticipo de haberes vía Pagos 360",    icono: <Zap size={22}/>,        color: "#10b981", visible: !!modulos.adelantos },
   ].filter(p => p.visible);
@@ -301,6 +327,7 @@ export default function NuevoLegajoPage() {
     setPaso("buscar"); setDni(""); setBcra(null); setJuicios(null); setNombreCliente("");
     setProducto(null); setMonto(""); setArchivos({ dniFrente: false, dniDorso: false, recibo: false });
     setStBcra("idle"); setStJuicios("idle"); setStCliente("idle"); setYaCliente(false);
+    setStCuad("idle"); setCuadData(null);
   };
 
   return (
@@ -415,7 +442,7 @@ export default function NuevoLegajoPage() {
       {paso === "producto" && (
         <div className="space-y-3">
           {productosDisponibles.map(p => (
-            <button key={p.key} onClick={() => { setProducto(p.key as Producto); setPaso("formulario"); }}
+            <button key={p.key} onClick={() => elegirProducto(p.key as Producto)}
               className="w-full bg-[#0A0A0A] border border-gray-900 hover:border-gray-600 rounded-2xl p-5 flex items-center gap-4 transition-all text-left">
               <div className="p-3 rounded-xl" style={{ backgroundColor: `${p.color}20`, color: p.color }}>{p.icono}</div>
               <div className="flex-1">
@@ -442,6 +469,15 @@ export default function NuevoLegajoPage() {
               <p className="text-xs text-gray-500">DNI {dni} · {producto === "PRIVADO" ? "Crédito Personal" : producto === "CUAD" ? "Descuento Haberes" : "Adelanto de Sueldo"}</p>
             </div>
           </div>
+
+          {producto === "CUAD" && (
+            <div className={`rounded-2xl p-4 border ${stCuad === "ok" ? "bg-green-900/10 border-green-900/40" : stCuad === "no_empleado" ? "bg-yellow-900/10 border-yellow-900/40" : stCuad === "procesando" ? "bg-gray-900/20 border-gray-800" : "bg-red-900/10 border-red-900/40"}`}>
+              {stCuad === "procesando" && <div className="flex items-center gap-2 text-gray-400 text-sm"><Loader2 size={13} className="animate-spin"/> Consultando cupo CUAD...</div>}
+              {stCuad === "ok" && cuadData && <div><p className="text-green-400 font-black text-sm">Cupo CUAD disponible</p><p className="text-white font-mono text-xl font-black mt-1">{fmt(cuadData.maximo)}</p></div>}
+              {stCuad === "no_empleado" && <p className="text-yellow-400 font-bold text-sm">No registra como empleado en el sistema CUAD</p>}
+              {stCuad === "error" && <p className="text-red-400 font-bold text-sm">No se pudo consultar el sistema CUAD</p>}
+            </div>
+          )}
 
           <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-5 space-y-4">
             <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Estructura del crédito</p>
