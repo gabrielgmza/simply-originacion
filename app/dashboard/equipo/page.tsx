@@ -1,12 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  collection, query, where, getDocs, doc,
-  updateDoc, serverTimestamp
+  collection, query, where, getDocs, doc, updateDoc, serverTimestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { Users, MapPin, Pencil, Save, Loader2, X, CheckCircle2 } from "lucide-react";
+import { Users, MapPin, Pencil, Save, Loader2, X, CheckCircle2, Plus, Eye, EyeOff } from "lucide-react";
 
 const ROLES = [
   { value: "GERENTE_GENERAL",     label: "Gerente General" },
@@ -17,17 +16,24 @@ const ROLES = [
   { value: "COBRANZAS",           label: "Cobranzas" },
 ];
 
+const NUEVO_VACIO = { nombre: "", email: "", password: "", rol: "VENDEDOR", sucursalId: "" };
+
 export default function EquipoPage() {
   const { entidadData, userData } = useAuth();
-  const [usuarios, setUsuarios]     = useState<any[]>([]);
+  const [usuarios,   setUsuarios]   = useState<any[]>([]);
   const [sucursales, setSucursales] = useState<any[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [editando, setEditando]     = useState<any>(null);
-  const [guardando, setGuardando]   = useState(false);
-  const [guardado, setGuardado]     = useState(false);
-  const [busqueda, setBusqueda]     = useState("");
+  const [loading,    setLoading]    = useState(true);
+  const [editando,   setEditando]   = useState<any>(null);
+  const [guardando,  setGuardando]  = useState(false);
+  const [guardado,   setGuardado]   = useState(false);
+  const [busqueda,   setBusqueda]   = useState("");
+  const [modalNuevo, setModalNuevo] = useState(false);
+  const [nuevoUser,  setNuevoUser]  = useState(NUEVO_VACIO);
+  const [verPass,    setVerPass]    = useState(false);
+  const [errorNuevo, setErrorNuevo] = useState("");
+  const [creando,    setCreando]    = useState(false);
 
-  const colorPrimario = entidadData?.configuracion?.colorPrimario || "#FF5E14";
+  const color = entidadData?.configuracion?.colorPrimario || "#FF5E14";
   const puedeGestionar = ["GERENTE_GENERAL","MASTER_PAYSUR"].includes(userData?.rol || "");
 
   const cargar = async () => {
@@ -40,8 +46,7 @@ export default function EquipoPage() {
       ]);
       setUsuarios(usSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       setSucursales(sucSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { cargar(); }, [entidadData]);
@@ -52,21 +57,38 @@ export default function EquipoPage() {
     try {
       await updateDoc(doc(db, "usuarios", editando.id), {
         sucursalId: editando.sucursalId || null,
-        rol: editando.rol,
-        activo: editando.activo,
+        rol: editando.rol, activo: editando.activo,
         fechaActualizacion: serverTimestamp(),
       });
-      setEditando(null);
-      setGuardado(true);
+      setEditando(null); setGuardado(true);
       setTimeout(() => setGuardado(false), 2000);
       cargar();
-    } catch { alert("Error al guardar."); }
-    finally { setGuardando(false); }
+    } finally { setGuardando(false); }
   };
 
-  const nombreSucursal = (id?: string) =>
-    sucursales.find(s => s.id === id)?.nombre || "Sin asignar";
+  const crearUsuario = async () => {
+    setErrorNuevo("");
+    if (!nuevoUser.nombre || !nuevoUser.email || !nuevoUser.password) {
+      setErrorNuevo("Nombre, email y contraseña son obligatorios"); return;
+    }
+    if (nuevoUser.password.length < 6) {
+      setErrorNuevo("La contraseña debe tener al menos 6 caracteres"); return;
+    }
+    setCreando(true);
+    try {
+      const res = await fetch("/api/usuarios/crear", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...nuevoUser, entidadId: entidadData?.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErrorNuevo(data.error || "Error al crear usuario"); return; }
+      setModalNuevo(false); setNuevoUser(NUEVO_VACIO);
+      setGuardado(true); setTimeout(() => setGuardado(false), 2000);
+      cargar();
+    } finally { setCreando(false); }
+  };
 
+  const nombreSucursal = (id?: string) => sucursales.find(s => s.id === id)?.nombre || "Sin asignar";
   const filtrados = usuarios.filter(u =>
     u.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
     u.email?.toLowerCase().includes(busqueda.toLowerCase())
@@ -79,13 +101,22 @@ export default function EquipoPage() {
           <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">Equipo</h1>
           <p className="text-gray-500 text-sm mt-1">{usuarios.length} usuarios · {sucursales.length} sucursales activas</p>
         </div>
-        {guardado && <span className="flex items-center gap-2 text-green-400 text-sm font-bold"><CheckCircle2 size={16}/> Guardado</span>}
+        <div className="flex items-center gap-3">
+          {guardado && <span className="flex items-center gap-2 text-green-400 text-sm font-bold"><CheckCircle2 size={16}/> Guardado</span>}
+          {puedeGestionar && (
+            <button onClick={() => { setModalNuevo(true); setErrorNuevo(""); setNuevoUser(NUEVO_VACIO); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-bold text-sm"
+              style={{ backgroundColor: color }}>
+              <Plus size={16}/> Nuevo usuario
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 flex items-center gap-3 max-w-sm">
         <Users size={15} className="text-gray-500"/>
         <input placeholder="Buscar por nombre o email..." className="bg-transparent text-sm text-white outline-none flex-1"
-          value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+          value={busqueda} onChange={e => setBusqueda(e.target.value)}/>
       </div>
 
       {loading ? (
@@ -132,16 +163,17 @@ export default function EquipoPage() {
                 </tr>
               ))}
               {filtrados.length === 0 && (
-                <tr><td colSpan={5} className="text-center text-gray-600 py-12 text-sm">Sin resultados</td></tr>
+                <tr><td colSpan={5} className="text-center text-gray-600 py-12 text-sm">Sin usuarios. Creá el primero con el botón "Nuevo usuario".</td></tr>
               )}
             </tbody>
           </table>
         </div>
       )}
 
+      {/* Modal editar */}
       {editando && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="font-black text-white">{editando.nombre}</h2>
@@ -153,14 +185,14 @@ export default function EquipoPage() {
               <div>
                 <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Rol</label>
                 <select value={editando.rol} onChange={e => setEditando((p:any) => ({...p, rol: e.target.value}))}
-                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none">
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none">
                   {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Sucursal</label>
                 <select value={editando.sucursalId || ""} onChange={e => setEditando((p:any) => ({...p, sucursalId: e.target.value || null}))}
-                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none">
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none">
                   <option value="">Sin asignar</option>
                   {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
@@ -175,8 +207,70 @@ export default function EquipoPage() {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setEditando(null)} className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 font-bold text-sm">Cancelar</button>
-              <button onClick={guardar} disabled={guardando} className="flex-1 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2" style={{backgroundColor: colorPrimario}}>
+              <button onClick={guardar} disabled={guardando} className="flex-1 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2" style={{backgroundColor: color}}>
                 {guardando ? <Loader2 size={15} className="animate-spin"/> : <Save size={15}/>} Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal nuevo usuario */}
+      {modalNuevo && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-black text-white text-lg">Nuevo usuario</h2>
+              <button onClick={() => setModalNuevo(false)}><X size={18} className="text-gray-500"/></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Nombre completo</label>
+                <input type="text" placeholder="Ej: Juan Pérez"
+                  value={nuevoUser.nombre} onChange={e => setNuevoUser(p => ({...p, nombre: e.target.value}))}
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-gray-500"/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Email</label>
+                <input type="email" placeholder="juan@empresa.com"
+                  value={nuevoUser.email} onChange={e => setNuevoUser(p => ({...p, email: e.target.value}))}
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none focus:border-gray-500"/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Contraseña inicial</label>
+                <div className="relative">
+                  <input type={verPass ? "text" : "password"} placeholder="Mínimo 6 caracteres"
+                    value={nuevoUser.password} onChange={e => setNuevoUser(p => ({...p, password: e.target.value}))}
+                    className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 pr-10 text-white text-sm outline-none focus:border-gray-500 font-mono"/>
+                  <button type="button" onClick={() => setVerPass(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                    {verPass ? <EyeOff size={15}/> : <Eye size={15}/>}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Rol</label>
+                <select value={nuevoUser.rol} onChange={e => setNuevoUser(p => ({...p, rol: e.target.value}))}
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none">
+                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 uppercase font-bold mb-1.5">Sucursal (opcional)</label>
+                <select value={nuevoUser.sucursalId} onChange={e => setNuevoUser(p => ({...p, sucursalId: e.target.value}))}
+                  className="w-full bg-[#111] border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm outline-none">
+                  <option value="">Sin asignar</option>
+                  {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+              </div>
+              {errorNuevo && <p className="text-red-400 text-xs font-bold bg-red-900/20 border border-red-900/40 rounded-xl px-3 py-2">{errorNuevo}</p>}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setModalNuevo(false)} className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 font-bold text-sm">Cancelar</button>
+              <button onClick={crearUsuario} disabled={creando}
+                className="flex-1 py-3 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+                style={{backgroundColor: color}}>
+                {creando ? <Loader2 size={15} className="animate-spin"/> : <Plus size={15}/>} Crear usuario
               </button>
             </div>
           </div>
