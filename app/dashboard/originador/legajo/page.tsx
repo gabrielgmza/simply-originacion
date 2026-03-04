@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import {
   Search, Loader2, CheckCircle2, AlertTriangle, XCircle,
@@ -304,9 +306,24 @@ export default function NuevoLegajoPage() {
       setPaso("analizando");
       setStCuad("procesando");
       try {
+        // Buscar credencial asignada al vendedor actual
+        const snapCreds = await getDocs(
+          query(collection(db, "credencialesCuad"),
+            where("entidadId", "==", entidadData?.id),
+            where("vendedoresAsignados", "array-contains", userData?.uid),
+            where("activa", "==", true)
+          )
+        );
+        if (snapCreds.empty) {
+          setStCuad("error");
+          setCuadData({ errorMsg: "No tenés una credencial CUAD asignada. Consultá con el gerente." });
+          setPaso("formulario");
+          return;
+        }
+        const cred = snapCreds.docs[0].data();
         const res = await fetch("https://simply-bot-mendoza-278599265960.us-central1.run.app/api/simular-cupo", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dni, usuario: entidadData?.credencialesCuad?.usuario, password: entidadData?.credencialesCuad?.password }),
+          body: JSON.stringify({ dni, usuario: cred.usuarioGobierno, password: cred.passwordGobierno }),
         });
         const data = await res.json();
         if (data.noRegistra) { setStCuad("no_empleado"); }
@@ -501,7 +518,7 @@ export default function NuevoLegajoPage() {
               {stCuad === "procesando" && <div className="flex items-center gap-2 text-gray-400 text-sm"><Loader2 size={13} className="animate-spin"/> Consultando cupo CUAD...</div>}
               {stCuad === "ok" && cuadData && <div><p className="text-green-400 font-black text-sm">Cupo CUAD disponible</p><p className="text-white font-mono text-xl font-black mt-1">{fmt(cuadData.maximo)}</p></div>}
               {stCuad === "no_empleado" && <p className="text-yellow-400 font-bold text-sm">No registra como empleado en el sistema CUAD</p>}
-              {stCuad === "error" && <p className="text-red-400 font-bold text-sm">No se pudo consultar el sistema CUAD</p>}
+              {stCuad === "error" && <p className="text-red-400 font-bold text-sm">{cuadData?.errorMsg || "No se pudo consultar el sistema CUAD"}</p>}
             </div>
           )}
 
