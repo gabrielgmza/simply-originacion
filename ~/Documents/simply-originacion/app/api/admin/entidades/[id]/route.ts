@@ -13,6 +13,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await batch.commit();
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("[DELETE entidad]", e);
     return NextResponse.json({ error: "Error al eliminar" }, { status: 500 });
   }
 }
@@ -22,6 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await req.json();
     const u: Record<string, any> = { fechaActualizacion: new Date() };
+
     if (body.comisiones)         u.comisiones = body.comisiones;
     if (body.modulosHabilitados) u.modulosHabilitados = body.modulosHabilitados;
     if (body.datos) {
@@ -32,9 +34,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (d.emailContacto)    u["contacto.email"] = d.emailContacto;
       if (d.telefonoContacto) u["contacto.telefono"] = d.telefonoContacto;
     }
+
     await adminDb.collection("entidades").doc(id).update(u);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("[PATCH entidad]", e);
     return NextResponse.json({ error: "Error al guardar" }, { status: 500 });
   }
 }
