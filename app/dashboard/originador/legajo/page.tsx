@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   Search, Loader2, CheckCircle2, AlertTriangle, XCircle,
   ChevronRight, CreditCard, Landmark, Zap, ArrowLeft,
-  User, Shield, Banknote, Save, UploadCloud, FileText
+  User, Save, UploadCloud, FileText, X, Building2, Gavel
 } from "lucide-react";
 
-// ─── Helpers ────────────────────────────────────────────────
 function calcularCuil(dni: string, sexo: string): string {
   const dniStr = dni.padStart(8, "0");
   let prefijo = sexo === "F" ? "27" : "20";
@@ -25,116 +24,238 @@ function calcularCuil(dni: string, sexo: string): string {
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 
-// ─── Tipos ──────────────────────────────────────────────────
+const BOT_URL = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
+
 type Paso = "buscar" | "analizando" | "resultado" | "producto" | "formulario" | "ok";
 type Producto = "PRIVADO" | "CUAD" | "ADELANTO";
 type ResultadoScoring = "APROBADO" | "OBSERVADO" | "RECHAZADO";
+type ModalTipo = "bcra" | "juicios" | null;
 
-// ─── Componentes auxiliares ─────────────────────────────────
-const Badge = ({ ok, label }: { ok: boolean | null; label: string }) => (
-  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${
-    ok === null ? "border-gray-800 text-gray-500" :
-    ok ? "border-green-900 bg-green-900/10 text-green-400" :
-    "border-red-900 bg-red-900/10 text-red-400"}`}>
-    {ok === null ? <Loader2 size={12} className="animate-spin"/> :
-     ok ? <CheckCircle2 size={12}/> : <XCircle size={12}/>}
-    {label}
-  </div>
-);
+// ── Modal ────────────────────────────────────────────────────
+function Modal({ tipo, bcra, juicios, onClose }: { tipo: ModalTipo; bcra: any; juicios: any; onClose: () => void }) {
+  if (!tipo) return null;
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[#0A0A0A] border border-gray-800 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-gray-800">
+          <div className="flex items-center gap-2">
+            {tipo === "bcra" ? <Building2 size={16} className="text-purple-400"/> : <Gavel size={16} className="text-orange-400"/>}
+            <p className="font-black text-white">{tipo === "bcra" ? "Central de Deudores BCRA" : "Juicios Universales"}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18}/></button>
+        </div>
 
-// ─── Componente principal ───────────────────────────────────
+        <div className="p-5 space-y-4">
+          {tipo === "bcra" && bcra && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-black rounded-xl p-3 border border-gray-900">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">Situación</p>
+                  <p className={`text-2xl font-black ${parseInt(bcra.peorSituacion) <= 2 ? "text-green-400" : "text-red-400"}`}>
+                    {bcra.peorSituacion}
+                  </p>
+                  <p className="text-[10px] text-gray-600 mt-0.5">
+                    {bcra.peorSituacion == 1 ? "Normal" : bcra.peorSituacion == 2 ? "Con seguimiento" : bcra.peorSituacion == 3 ? "Con problemas" : bcra.peorSituacion == 4 ? "Alto riesgo" : "Irrecuperable"}
+                  </p>
+                </div>
+                <div className="bg-black rounded-xl p-3 border border-gray-900">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">Deuda total</p>
+                  <p className="text-xl font-black text-white">
+                    {bcra.detalles?.reduce((a: number, d: any) => a + (d.monto || 0), 0) > 0
+                      ? fmt(bcra.detalles.reduce((a: number, d: any) => a + (d.monto || 0), 0))
+                      : "Sin deuda"}
+                  </p>
+                </div>
+              </div>
+
+              {bcra.tieneChequesRechazados && (
+                <div className="bg-red-900/20 border border-red-900/40 rounded-xl p-3 flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-red-400"/>
+                  <p className="text-red-400 text-xs font-bold">Tiene cheques rechazados</p>
+                </div>
+              )}
+
+              {bcra.detalles?.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Detalle por entidad</p>
+                  {bcra.detalles.map((d: any, i: number) => (
+                    <div key={i} className="bg-black border border-gray-900 rounded-xl p-3">
+                      <div className="flex justify-between items-start">
+                        <p className="text-sm font-bold text-white">{d.entidad}</p>
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-full ${d.situacion <= 2 ? "bg-green-900/30 text-green-400" : "bg-red-900/30 text-red-400"}`}>
+                          Sit. {d.situacion}
+                        </span>
+                      </div>
+                      <div className="flex gap-4 mt-1">
+                        <p className="text-xs text-gray-500">Monto: <span className="text-white font-bold">{fmt(d.monto || 0)}</span></p>
+                        {d.diasAtraso > 0 && <p className="text-xs text-gray-500">Atraso: <span className="text-red-400 font-bold">{d.diasAtraso}d</span></p>}
+                        <p className="text-xs text-gray-500">Período: <span className="text-white font-bold">{d.periodo}</span></p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <CheckCircle2 size={28} className="text-green-400 mx-auto mb-2"/>
+                  <p className="text-green-400 font-bold">Sin deudas registradas</p>
+                  <p className="text-xs text-gray-500 mt-1">El cliente no figura en la Central de Deudores</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {tipo === "juicios" && (
+            <>
+              {!juicios ? (
+                <div className="text-center py-6">
+                  <XCircle size={28} className="text-red-400 mx-auto mb-2"/>
+                  <p className="text-red-400 font-bold">Error al consultar</p>
+                  <p className="text-xs text-gray-500 mt-1">No se pudo conectar con el Registro de Juicios</p>
+                </div>
+              ) : juicios.registros?.length === 0 ? (
+                <div className="text-center py-6">
+                  <CheckCircle2 size={28} className="text-green-400 mx-auto mb-2"/>
+                  <p className="text-green-400 font-bold">Sin juicios registrados</p>
+                  <p className="text-xs text-gray-500 mt-1">No figura en el Registro de Juicios Universales de Mendoza</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">{juicios.registros.length} registro(s) encontrado(s)</p>
+                  {juicios.registros.map((r: any, i: number) => (
+                    <div key={i} className="bg-black border border-red-900/30 rounded-xl p-3 space-y-1">
+                      <p className="text-sm font-black text-white">{r.tipo}</p>
+                      <p className="text-xs text-gray-400">{r.nombre}</p>
+                      <div className="flex gap-3 text-[10px] text-gray-500 flex-wrap">
+                        <span>Exp: {r.expediente}</span>
+                        <span>Tribunal: {r.tribunal}</span>
+                        <span>Fecha: {r.fecha}</span>
+                      </div>
+                      {r.certificadoUrl && (
+                        <a href={r.certificadoUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-[10px] text-blue-400 underline">Ver certificado</a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Card de consulta ─────────────────────────────────────────
+function CardConsulta({ icono, titulo, status, resumen, onClick }: {
+  icono: React.ReactNode; titulo: string;
+  status: "idle"|"procesando"|"ok"|"error";
+  resumen?: string; onClick?: () => void;
+}) {
+  const colores = {
+    idle:       "border-gray-800 text-gray-500",
+    procesando: "border-gray-700 text-gray-400",
+    ok:         "border-green-900/50 text-green-400",
+    error:      "border-red-900/50 text-red-400",
+  };
+  return (
+    <button onClick={onClick} disabled={status === "idle" || status === "procesando"}
+      className={`bg-[#0A0A0A] border rounded-2xl p-4 text-left transition-all w-full ${colores[status]} ${status === "ok" ? "hover:border-green-700 cursor-pointer" : "cursor-default"}`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">{icono} {titulo}</div>
+        {status === "procesando" && <Loader2 size={13} className="animate-spin"/>}
+        {status === "ok"    && <CheckCircle2 size={13} className="text-green-400"/>}
+        {status === "error" && <AlertTriangle size={13} className="text-red-400"/>}
+      </div>
+      {resumen && <p className="text-sm font-bold">{resumen}</p>}
+      {status === "ok" && <p className="text-[10px] text-gray-600 mt-1">Presioná para ver detalle →</p>}
+      {status === "error" && <p className="text-[10px] text-red-500 mt-1">Error al consultar</p>}
+    </button>
+  );
+}
+
+// ── Página principal ─────────────────────────────────────────
 export default function NuevoLegajoPage() {
   const { entidadData, userData } = useAuth();
   const router = useRouter();
   const color = entidadData?.configuracion?.colorPrimario || "#FF5E14";
   const modulos = entidadData?.modulosHabilitados || {};
 
-  // Paso actual
-  const [paso, setPaso] = useState<Paso>("buscar");
-
-  // Datos cliente
-  const [dni, setDni]   = useState("");
-  const [sexo, setSexo] = useState("M");
-  const [cuil, setCuil] = useState("");
-
-  // Resultados consultas
-  const [bcra, setBcra]         = useState<any>(null);
-  const [juicios, setJuicios]   = useState<any>(null);
-  const [cupo, setCupo]         = useState<any>(null);
+  const [paso, setPaso]     = useState<Paso>("buscar");
+  const [dni, setDni]       = useState("");
+  const [sexo, setSexo]     = useState("M");
+  const [cuil, setCuil]     = useState("");
+  const [bcra, setBcra]     = useState<any>(null);
+  const [juicios, setJuicios] = useState<any>(null);
   const [yaCliente, setYaCliente] = useState(false);
   const [nombreCliente, setNombreCliente] = useState("");
-
-  // Scoring
   const [scoring, setScoring]   = useState<ResultadoScoring>("APROBADO");
   const [situacion, setSituacion] = useState(1);
-
-  // Producto elegido
   const [producto, setProducto] = useState<Producto | null>(null);
-
-  // Formulario crédito
   const [monto, setMonto]   = useState("");
   const [cuotas, setCuotas] = useState("12");
   const [archivos, setArchivos] = useState({ dniFrente: false, dniDorso: false, recibo: false });
   const [guardando, setGuardando] = useState(false);
   const [operacionId, setOperacionId] = useState<string | null>(null);
+  const [modal, setModal]   = useState<ModalTipo>(null);
 
-  // ── PASO 1: Evaluar ──────────────────────────────────────
+  const [stBcra,    setStBcra]    = useState<"idle"|"procesando"|"ok"|"error">("idle");
+  const [stJuicios, setStJuicios] = useState<"idle"|"procesando"|"ok"|"error">("idle");
+  const [stCliente, setStCliente] = useState<"idle"|"procesando"|"ok"|"error">("idle");
+
   const evaluar = async () => {
     if (dni.length < 7) return;
     setPaso("analizando");
+    setStBcra("procesando"); setStJuicios("procesando"); setStCliente("procesando");
+    const cuilCalc = calcularCuil(dni, sexo);
+    setCuil(cuilCalc);
 
-    const cuilCalculado = calcularCuil(dni, sexo);
-    setCuil(cuilCalculado);
-
-    // Consultas en paralelo
     const [resBcra, resJuicios, resCliente] = await Promise.allSettled([
       fetch("/api/bcra", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documento: dni, sexo }),
       }).then(r => r.json()),
-      fetch("https://simply-bot-mendoza-278599265960.us-central1.run.app/api/consultar-juicios", {
+      fetch(`${BOT_URL}/api/consultar-juicios`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dni }),
-      }).then(r => r.json()).catch(() => null),
+      }).then(r => r.json()),
       fetch(`/api/clientes/buscar?dni=${dni}&entidadId=${entidadData?.id}`).then(r => r.json()).catch(() => null),
     ]);
 
-    // Procesar BCRA
-    let bcraData = null;
     let sit = 1;
     if (resBcra.status === "fulfilled" && resBcra.value?.success) {
-      bcraData = resBcra.value.bcra;
-      sit = parseInt(bcraData?.peorSituacion || "1");
-      if (bcraData?.nombre) setNombreCliente(bcraData.nombre);
-      setBcra(bcraData);
-    }
+      const b = resBcra.value.bcra;
+      setBcra(b);
+      sit = parseInt(b?.peorSituacion || "1");
+      if (b?.nombre) setNombreCliente(b.nombre);
+      setStBcra("ok");
+    } else setStBcra("error");
     setSituacion(sit);
 
-    // Procesar juicios
+    let tieneJuicios = false;
     if (resJuicios.status === "fulfilled" && resJuicios.value?.success) {
       setJuicios(resJuicios.value.judicial);
+      tieneJuicios = (resJuicios.value.judicial?.registros?.length || 0) > 0;
       if (!nombreCliente && resJuicios.value.judicial?.registros?.[0]?.nombre)
         setNombreCliente(resJuicios.value.judicial.registros[0].nombre);
-    }
+      setStJuicios("ok");
+    } else setStJuicios("error");
 
-    // ¿Ya es cliente?
     if (resCliente.status === "fulfilled" && resCliente.value?.existe) {
       setYaCliente(true);
       if (!nombreCliente && resCliente.value?.nombre) setNombreCliente(resCliente.value.nombre);
     }
+    setStCliente("ok");
 
-    // Scoring
     const maxSit = entidadData?.scoring?.bcraMaxSituacion ?? 2;
-    const tieneJuicios = resJuicios.status === "fulfilled" && resJuicios.value?.judicial?.registros?.length > 0;
     let resultado: ResultadoScoring = "APROBADO";
     if (sit > maxSit) resultado = entidadData?.scoring?.accionBcraExcedido === "RECHAZADO" ? "RECHAZADO" : "OBSERVADO";
     if (tieneJuicios && resultado !== "RECHAZADO") resultado = "OBSERVADO";
     setScoring(resultado);
-
     setPaso("resultado");
   };
 
-  // ── PASO 3: Guardar operación ────────────────────────────
   const guardarOperacion = async () => {
     if (!monto || !producto) return;
     setGuardando(true);
@@ -143,19 +264,15 @@ export default function NuevoLegajoPage() {
       const cuotasNum = parseInt(cuotas) || 12;
       const TEM = ((entidadData?.configuracion?.tasaInteresBase || 80) / 100) / 12;
       const cuota = Math.round((montoNum * TEM * Math.pow(1 + TEM, cuotasNum)) / (Math.pow(1 + TEM, cuotasNum) - 1));
-
       const res = await fetch("/api/operaciones", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          entidadId:  entidadData?.id,
-          vendedorId: userData?.uid,
-          sucursalId: userData?.sucursalId,
-          tipo:       producto,
-          estado:     "EN_REVISION",
+          entidadId: entidadData?.id, vendedorId: userData?.uid, sucursalId: userData?.sucursalId,
+          tipo: producto, estado: "EN_REVISION",
           cliente: { dni, cuil, nombre: nombreCliente, scoreBcra: situacion },
           financiero: { montoSolicitado: montoNum, cuotas: cuotasNum, valorCuota: cuota },
-          scoring:    { resultado: scoring, situacionBcra: situacion },
-          bcra:       bcra || {},
+          scoring: { resultado: scoring, situacionBcra: situacion },
+          bcra: bcra || {},
           legajo: {
             dniFrenteUrl: archivos.dniFrente ? "pendiente_upload" : null,
             dniDorsoUrl:  archivos.dniDorso  ? "pendiente_upload" : null,
@@ -163,10 +280,7 @@ export default function NuevoLegajoPage() {
         }),
       });
       const data = await res.json();
-      if (data.id || data.operacionId) {
-        setOperacionId(data.id || data.operacionId);
-        setPaso("ok");
-      }
+      if (data.id || data.operacionId) { setOperacionId(data.id || data.operacionId); setPaso("ok"); }
     } finally { setGuardando(false); }
   };
 
@@ -178,16 +292,21 @@ export default function NuevoLegajoPage() {
     : 0;
 
   const productosDisponibles = [
-    { key: "PRIVADO",  label: "Crédito Personal", desc: "Préstamo personal con cuotas fijas", icono: <CreditCard size={24}/>, color: "#3b82f6", visible: !!modulos.privados || true },
-    { key: "CUAD",     label: "Descuento Haberes", desc: "Descuento por nómina gobierno",      icono: <Landmark size={24}/>,    color: "#8b5cf6", visible: !!modulos.cuad },
-    { key: "ADELANTO", label: "Adelanto de Sueldo", desc: "Anticipo de haberes vía Pagos 360", icono: <Zap size={24}/>,         color: "#10b981", visible: !!modulos.adelantos },
+    { key: "PRIVADO",  label: "Crédito Personal",   desc: "Préstamo personal con cuotas fijas",   icono: <CreditCard size={22}/>, color: "#3b82f6", visible: true },
+    { key: "CUAD",     label: "Descuento Haberes",   desc: "Descuento por nómina gobierno",        icono: <Landmark size={22}/>,   color: "#8b5cf6", visible: !!modulos.cuad },
+    { key: "ADELANTO", label: "Adelanto de Sueldo",  desc: "Anticipo de haberes vía Pagos 360",    icono: <Zap size={22}/>,        color: "#10b981", visible: !!modulos.adelantos },
   ].filter(p => p.visible);
 
-  // ── RENDER ───────────────────────────────────────────────
+  const resetear = () => {
+    setPaso("buscar"); setDni(""); setBcra(null); setJuicios(null); setNombreCliente("");
+    setProducto(null); setMonto(""); setArchivos({ dniFrente: false, dniDorso: false, recibo: false });
+    setStBcra("idle"); setStJuicios("idle"); setStCliente("idle"); setYaCliente(false);
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-20">
+      <Modal tipo={modal} bcra={bcra} juicios={juicios} onClose={() => setModal(null)}/>
 
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-black text-white tracking-tighter">Nuevo Legajo</h1>
         <p className="text-gray-500 text-sm mt-1">
@@ -195,21 +314,18 @@ export default function NuevoLegajoPage() {
           {paso === "analizando"&& "Consultando BCRA, juicios y scoring..."}
           {paso === "resultado" && "Resultado del análisis de riesgo"}
           {paso === "producto"  && "Seleccioná el tipo de crédito"}
-          {paso === "formulario"&& `Configurando ${producto === "PRIVADO" ? "Crédito Personal" : producto === "CUAD" ? "Descuento Haberes" : "Adelanto de Sueldo"}`}
+          {paso === "formulario"&& "Configurá el crédito"}
           {paso === "ok"        && "Operación guardada exitosamente"}
         </p>
       </div>
 
-      {/* ── PASO: BUSCAR ── */}
+      {/* BUSCAR */}
       {paso === "buscar" && (
         <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-6 space-y-4">
           <div>
             <label className="text-xs text-gray-500 uppercase font-bold tracking-widest block mb-1.5">DNI</label>
-            <input
-              type="number" value={dni} onChange={e => setDni(e.target.value)}
-              placeholder="Ej: 33094813"
-              className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 text-white text-lg font-mono outline-none focus:border-orange-500"
-            />
+            <input type="number" value={dni} onChange={e => setDni(e.target.value)} placeholder="Ej: 33094813"
+              className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 text-white text-lg font-mono outline-none focus:border-orange-500"/>
           </div>
           <div>
             <label className="text-xs text-gray-500 uppercase font-bold tracking-widest block mb-1.5">Sexo (del DNI)</label>
@@ -224,64 +340,63 @@ export default function NuevoLegajoPage() {
             </div>
           </div>
           <button onClick={evaluar} disabled={dni.length < 7}
-            className="w-full py-4 rounded-xl font-black text-white flex items-center justify-center gap-2 disabled:opacity-30 transition-all"
+            className="w-full py-4 rounded-xl font-black text-white flex items-center justify-center gap-2 disabled:opacity-30"
             style={{ backgroundColor: color }}>
             <Search size={16}/> Evaluar cliente
           </button>
         </div>
       )}
 
-      {/* ── PASO: ANALIZANDO ── */}
+      {/* ANALIZANDO */}
       {paso === "analizando" && (
-        <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-8 text-center space-y-4">
-          <Loader2 size={36} className="animate-spin mx-auto" style={{ color }}/>
-          <p className="font-black text-white">Analizando perfil crediticio</p>
-          <div className="space-y-2">
-            {["Consultando Central de Deudores BCRA...","Verificando juicios y concursos...","Revisando historial en la entidad..."].map((t,i) => (
-              <p key={i} className="text-xs text-gray-500 animate-pulse" style={{ animationDelay: `${i*0.3}s` }}>{t}</p>
-            ))}
-          </div>
+        <div className="space-y-3">
+          <CardConsulta icono={<Building2 size={13}/>} titulo="Situación BCRA" status={stBcra}/>
+          <CardConsulta icono={<Gavel size={13}/>}     titulo="Juicios / Concursos" status={stJuicios}/>
+          <CardConsulta icono={<User size={13}/>}       titulo="Historial entidad" status={stCliente}/>
         </div>
       )}
 
-      {/* ── PASO: RESULTADO ── */}
+      {/* RESULTADO */}
       {paso === "resultado" && (
         <div className="space-y-4">
-          {/* Card resultado */}
-          <div className={`rounded-2xl p-6 border ${
+          <div className={`rounded-2xl p-5 border ${
             scoring === "APROBADO"  ? "bg-green-900/10 border-green-900/40" :
             scoring === "OBSERVADO" ? "bg-yellow-900/10 border-yellow-900/40" :
                                       "bg-red-900/10 border-red-900/40"}`}>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-2">
               {scoring === "APROBADO"  && <CheckCircle2 size={22} className="text-green-400"/>}
               {scoring === "OBSERVADO" && <AlertTriangle size={22} className="text-yellow-400"/>}
               {scoring === "RECHAZADO" && <XCircle size={22} className="text-red-400"/>}
-              <p className={`text-xl font-black ${
-                scoring === "APROBADO" ? "text-green-400" : scoring === "OBSERVADO" ? "text-yellow-400" : "text-red-400"}`}>
-                {scoring}
-              </p>
+              <p className={`text-xl font-black ${scoring === "APROBADO" ? "text-green-400" : scoring === "OBSERVADO" ? "text-yellow-400" : "text-red-400"}`}>{scoring}</p>
             </div>
-            {nombreCliente && <p className="text-white font-bold text-lg">{nombreCliente}</p>}
+            {nombreCliente && <p className="text-white font-bold">{nombreCliente}</p>}
             <p className="text-gray-500 text-sm font-mono">DNI {dni} · CUIL {cuil}</p>
           </div>
 
-          {/* Checks */}
-          <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-4 space-y-3">
-            <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Detalle del análisis</p>
-            <div className="flex flex-wrap gap-2">
-              <Badge ok={bcra !== null ? situacion <= 2 : null} label={`BCRA Sit. ${situacion}`}/>
-              <Badge ok={juicios !== null ? (juicios?.registros?.length || 0) === 0 : null}
-                label={juicios ? `${juicios?.registros?.length || 0} juicios` : "Juicios"}/>
-              <Badge ok={!yaCliente} label={yaCliente ? "Ya es cliente" : "Cliente nuevo"}/>
-            </div>
-            {bcra?.tieneChequesRechazados && (
-              <p className="text-xs text-red-400 font-bold flex items-center gap-1">
-                <AlertTriangle size={11}/> Tiene cheques rechazados
-              </p>
-            )}
+          {/* Cards clicables */}
+          <div className="grid grid-cols-1 gap-3">
+            <CardConsulta
+              icono={<Building2 size={13}/>} titulo="Situación BCRA" status={stBcra}
+              resumen={bcra ? `Situación ${bcra.peorSituacion} · ${bcra.tieneDeudas ? "Con deudas" : "Sin deudas"}${bcra.tieneChequesRechazados ? " · Cheques rechazados" : ""}` : undefined}
+              onClick={() => setModal("bcra")}
+            />
+            <CardConsulta
+              icono={<Gavel size={13}/>} titulo="Juicios / Concursos" status={stJuicios}
+              resumen={juicios ? `${juicios.registros?.length || 0} registro(s) encontrado(s)` : undefined}
+              onClick={() => setModal("juicios")}
+            />
+            <CardConsulta
+              icono={<User size={13}/>} titulo="Historial entidad" status={stCliente}
+              resumen={yaCliente ? "Ya es cliente de la entidad" : "Cliente nuevo"}
+            />
           </div>
 
-          {/* Acciones */}
+          {scoring === "OBSERVADO" && (
+            <p className="text-xs text-yellow-500 text-center bg-yellow-900/10 border border-yellow-900/30 rounded-xl p-3">
+              El cliente tiene observaciones. Podés continuar pero el supervisor deberá aprobar.
+            </p>
+          )}
+
           {scoring !== "RECHAZADO" && (
             <button onClick={() => setPaso("producto")}
               className="w-full py-4 rounded-xl font-black text-white flex items-center justify-center gap-2"
@@ -289,25 +404,20 @@ export default function NuevoLegajoPage() {
               Continuar con el crédito <ChevronRight size={16}/>
             </button>
           )}
-          {scoring === "OBSERVADO" && (
-            <p className="text-xs text-yellow-500 text-center">El cliente tiene observaciones. Podés continuar pero el supervisor deberá aprobar.</p>
-          )}
-          <button onClick={() => { setPaso("buscar"); setDni(""); setBcra(null); setJuicios(null); setNombreCliente(""); }}
+          <button onClick={resetear}
             className="w-full py-3 rounded-xl font-bold text-gray-500 hover:text-white text-sm flex items-center justify-center gap-2">
             <ArrowLeft size={14}/> Nueva consulta
           </button>
         </div>
       )}
 
-      {/* ── PASO: ELEGIR PRODUCTO ── */}
+      {/* PRODUCTO */}
       {paso === "producto" && (
         <div className="space-y-3">
           {productosDisponibles.map(p => (
             <button key={p.key} onClick={() => { setProducto(p.key as Producto); setPaso("formulario"); }}
               className="w-full bg-[#0A0A0A] border border-gray-900 hover:border-gray-600 rounded-2xl p-5 flex items-center gap-4 transition-all text-left">
-              <div className="p-3 rounded-xl" style={{ backgroundColor: `${p.color}20`, color: p.color }}>
-                {p.icono}
-              </div>
+              <div className="p-3 rounded-xl" style={{ backgroundColor: `${p.color}20`, color: p.color }}>{p.icono}</div>
               <div className="flex-1">
                 <p className="font-black text-white">{p.label}</p>
                 <p className="text-xs text-gray-500">{p.desc}</p>
@@ -322,10 +432,9 @@ export default function NuevoLegajoPage() {
         </div>
       )}
 
-      {/* ── PASO: FORMULARIO ── */}
+      {/* FORMULARIO */}
       {paso === "formulario" && (
         <div className="space-y-4">
-          {/* Info cliente */}
           <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-4 flex items-center gap-3">
             <User size={16} className="text-gray-500"/>
             <div>
@@ -334,15 +443,13 @@ export default function NuevoLegajoPage() {
             </div>
           </div>
 
-          {/* Monto */}
           <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-5 space-y-4">
             <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Estructura del crédito</p>
             <div>
               <label className="text-xs text-gray-500 uppercase font-bold tracking-widest block mb-1.5">Monto</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                <input type="number" value={monto} onChange={e => setMonto(e.target.value)}
-                  placeholder="150000"
+                <input type="number" value={monto} onChange={e => setMonto(e.target.value)} placeholder="150000"
                   className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 pl-8 text-white text-lg font-mono outline-none focus:border-orange-500"/>
               </div>
             </div>
@@ -350,7 +457,7 @@ export default function NuevoLegajoPage() {
               <div>
                 <label className="text-xs text-gray-500 uppercase font-bold tracking-widest block mb-1.5">Cuotas</label>
                 <select value={cuotas} onChange={e => setCuotas(e.target.value)}
-                  className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 text-white outline-none focus:border-orange-500 font-bold">
+                  className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 text-white outline-none font-bold">
                   {[1,3,6,9,12,18,24,36].map(n => (
                     <option key={n} value={n}>{n} {n === 1 ? "cuota" : "cuotas"}</option>
                   ))}
@@ -365,30 +472,22 @@ export default function NuevoLegajoPage() {
             )}
           </div>
 
-          {/* Documentación */}
           <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-5 space-y-3">
             <p className="text-xs text-gray-500 uppercase font-bold tracking-widest">Documentación</p>
-            {[
-              { key: "dniFrente", label: "DNI Frente" },
-              { key: "dniDorso",  label: "DNI Dorso" },
-              { key: "recibo",    label: "Recibo de Sueldo" },
-            ].map(d => (
-              <button key={d.key} onClick={() => setArchivos(p => ({ ...p, [d.key]: !p[d.key as keyof typeof p] }))}
-                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
-                  (archivos as any)[d.key] ? "bg-green-900/20 border-green-900 text-green-400" : "bg-black border-gray-800 text-gray-500 hover:border-gray-600"}`}>
+            {[{ key: "dniFrente", label: "DNI Frente" }, { key: "dniDorso", label: "DNI Dorso" }, { key: "recibo", label: "Recibo de Sueldo" }].map(d => (
+              <button key={d.key} onClick={() => setArchivos(p => ({ ...p, [d.key]: !(p as any)[d.key] }))}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${(archivos as any)[d.key] ? "bg-green-900/20 border-green-900 text-green-400" : "bg-black border-gray-800 text-gray-500 hover:border-gray-600"}`}>
                 <span className="font-bold flex items-center gap-2 text-sm"><FileText size={14}/>{d.label}</span>
                 {(archivos as any)[d.key] ? <CheckCircle2 size={15}/> : <UploadCloud size={15}/>}
               </button>
             ))}
           </div>
 
-          {/* Guardar */}
           <button onClick={guardarOperacion} disabled={!montoNum || guardando}
             className="w-full py-4 rounded-xl font-black text-white flex items-center justify-center gap-2 disabled:opacity-30"
             style={{ backgroundColor: color }}>
             {guardando ? <><Loader2 size={14} className="animate-spin"/> Guardando...</> : <><Save size={14}/> Guardar operación</>}
           </button>
-
           <button onClick={() => setPaso("producto")}
             className="w-full py-3 rounded-xl font-bold text-gray-500 hover:text-white text-sm flex items-center justify-center gap-2">
             <ArrowLeft size={14}/> Cambiar producto
@@ -396,18 +495,18 @@ export default function NuevoLegajoPage() {
         </div>
       )}
 
-      {/* ── PASO: OK ── */}
+      {/* OK */}
       {paso === "ok" && (
         <div className="bg-[#0A0A0A] border border-green-900/40 rounded-2xl p-8 text-center space-y-4">
           <CheckCircle2 size={48} className="text-green-400 mx-auto"/>
           <p className="text-xl font-black text-white">Operación guardada</p>
           <p className="text-gray-500 text-sm">Estado: EN REVISIÓN · ID: {operacionId}</p>
           <div className="flex gap-3">
-            <button onClick={() => router.push(`/dashboard/aprobacion`)}
+            <button onClick={() => router.push("/dashboard/aprobacion")}
               className="flex-1 py-3 rounded-xl font-bold text-white text-sm" style={{ backgroundColor: color }}>
               Ver en aprobación
             </button>
-            <button onClick={() => { setPaso("buscar"); setDni(""); setMonto(""); setBcra(null); setJuicios(null); setNombreCliente(""); setProducto(null); setArchivos({ dniFrente: false, dniDorso: false, recibo: false }); }}
+            <button onClick={resetear}
               className="flex-1 py-3 rounded-xl font-bold text-gray-400 hover:text-white border border-gray-800 text-sm">
               Nuevo legajo
             </button>
