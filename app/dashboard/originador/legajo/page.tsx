@@ -226,7 +226,7 @@ export default function NuevoLegajoPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dni }),
       }).then(r => r.json()),
-      fetch(`/api/clientes/buscar?dni=${dni}&entidadId=${entidadData?.id}`).then(r => r.json()).catch(() => null),
+      Promise.resolve(null), // historial interno (futuro)
     ]);
 
     let sit = 1;
