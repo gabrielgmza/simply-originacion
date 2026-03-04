@@ -1,104 +1,127 @@
+// app/api/bcra/route.ts
 import { NextResponse } from "next/server";
-import https from "https";
 
-// 1. Calculadora de CUIL (Directo como me pediste)
 function calcularCuil(dni: string, sexo: string): string {
-    const dniStr = dni.padStart(8, '0');
-    let prefijo = sexo === 'M' ? '20' : '27';
-    const multiplicadores = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-    let base = prefijo + dniStr;
-    let suma = 0;
-    for (let i = 0; i < 10; i++) suma += parseInt(base[i]) * multiplicadores[i];
-    let resto = suma % 11;
-    let digito = 11 - resto;
-    if (digito === 11) digito = 0;
-    if (digito === 10) { prefijo = '23'; digito = sexo === 'M' ? 9 : 4; base = prefijo + dniStr; }
-    return base + digito.toString();
+  const dniStr = dni.padStart(8, "0");
+  let prefijo = sexo === "F" ? "27" : "20";
+  const mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  let suma = 0;
+  const base = prefijo + dniStr;
+  for (let i = 0; i < 10; i++) suma += parseInt(base[i]) * mult[i];
+  let digito = 11 - (suma % 11);
+  if (digito === 11) digito = 0;
+  if (digito === 10) {
+    prefijo = "23";
+    digito = sexo === "F" ? 4 : 9;
+  }
+  return prefijo + dniStr + digito.toString();
 }
 
-// 2. Conector de Bajo Nivel (Evita el bloqueo SSL del Gobierno)
-function fetchBcraApi(cuil: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-        const options = {
-            hostname: 'api.bcra.gob.ar',
-            port: 443,
-            path: `/CentralDeDeudores/v1.0/Deudas/${cuil}`,
-            method: 'GET',
-            rejectUnauthorized: false, // LA CLAVE: Ignora los certificados rotos del gobierno
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        };
-
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-                try {
-                    resolve({ status: res.statusCode, data: data ? JSON.parse(data) : null });
-                } catch (e) {
-                    resolve({ status: res.statusCode, data: null });
-                }
-            });
-        });
-
-        req.on('error', (e) => reject(e));
-        
-        // Si el gobierno se cuelga por más de 10 segundos, cortamos
-        req.setTimeout(10000, () => { 
-            req.destroy(); 
-            reject(new Error("Timeout conectando al BCRA")); 
-        });
-        req.end();
-    });
+async function fetchBcra(path: string) {
+  const url = `https://api.bcra.gob.ar${path}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Mozilla/5.0",
+    },
+    // Vercel no soporta rejectUnauthorized — usamos fetch nativo que acepta el cert del BCRA
+  });
+  return res;
 }
 
-// 3. Ejecución de la ruta en Vercel
 export async function POST(req: Request) {
-    try {
-        const { documento, sexo } = await req.json();
-        const docLimpio = documento.replace(/[^0-9]/g, '');
-        const cuil = docLimpio.length >= 10 ? docLimpio : calcularCuil(docLimpio, sexo);
-        
-        console.log(`[BCRA DIRECTO HTTPS] Consultando CUIL: ${cuil}`);
+  try {
+    const { documento, sexo } = await req.json();
+    const docLimpio = documento.replace(/[^0-9]/g, "");
+    const cuil = docLimpio.length >= 10 ? docLimpio : calcularCuil(docLimpio, sexo || "M");
 
-        const response = await fetchBcraApi(cuil);
+    console.log(`[BCRA] Consultando CUIL: ${cuil}`);
 
-        if (response.status === 200) {
-            const data = response.data;
-            let bcraData = { error: false, tieneDeudas: false, peorSituacion: "1", nombre: "", cuil: cuil, detalles: [] };
-            
-            if (data && data.results) {
-                bcraData.nombre = data.results.denominacion || "";
-                
-                // Leemos el array de "periodos" que figura en el PDF
-                if (data.results.periodos && data.results.periodos.length > 0) {
-                    const ultimoPeriodo = data.results.periodos[0];
-                    if (ultimoPeriodo.entidades && ultimoPeriodo.entidades.length > 0) {
-                        bcraData.tieneDeudas = true;
-                        bcraData.detalles = ultimoPeriodo.entidades.map((ent: any) => ({
-                            entidad: ent.entidad,
-                            situacion: ent.situacion.toString(),
-                            monto: ent.monto,
-                            periodo: ultimoPeriodo.periodo
-                        }));
-                        const situaciones = ultimoPeriodo.entidades.map((d: any) => parseInt(d.situacion));
-                        bcraData.peorSituacion = Math.max(...situaciones).toString();
-                    }
-                }
-            }
-            return NextResponse.json({ success: true, bcra: bcraData });
-            
-        } else if (response.status === 404) {
-            // Un 404 en el PDF del gobierno significa que NO HAY DEUDAS (Está limpio)
-            return NextResponse.json({ success: true, bcra: { error: false, tieneDeudas: false, peorSituacion: "1", cuil } });
-        } else {
-            console.log(`[BCRA] El Gobierno falló con status HTTP: ${response.status}`);
-            return NextResponse.json({ success: false, error: true, mensaje: `Servidor BCRA devolvió error ${response.status}` }, { status: 200 });
+    // Consulta deudas y cheques en paralelo
+    const [resDeudas, resCheques] = await Promise.allSettled([
+      fetchBcra(`/centraldedeudores/v1.0/Deudas/${cuil}`),
+      fetchBcra(`/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`),
+    ]);
+
+    let bcraData: any = {
+      error:         false,
+      tieneDeudas:   false,
+      peorSituacion: "1",
+      nombre:        "",
+      cuil,
+      detalles:      [],
+      cheques:       [],
+      tieneChequesRechazados: false,
+    };
+
+    // Procesar deudas
+    if (resDeudas.status === "fulfilled") {
+      const r = resDeudas.value;
+      if (r.status === 200) {
+        const data = await r.json();
+        bcraData.nombre = data.results?.denominacion || "";
+        const periodos = data.results?.periodos || [];
+        if (periodos.length > 0) {
+          const ultimo = periodos[0];
+          const entidades = ultimo.entidades || [];
+          if (entidades.length > 0) {
+            bcraData.tieneDeudas = true;
+            bcraData.detalles = entidades.map((e: any) => ({
+              entidad:      e.entidad,
+              situacion:    e.situacion,
+              monto:        (e.monto || 0) * 1000, // viene en miles
+              diasAtraso:   e.diasAtrasoPago || 0,
+              periodo:      ultimo.periodo,
+            }));
+            const situaciones = entidades.map((e: any) => parseInt(e.situacion));
+            bcraData.peorSituacion = Math.max(...situaciones).toString();
+          }
         }
-    } catch (error: any) {
-        console.log(`[BCRA] Error de conexión forzada: ${error.message}`);
-        return NextResponse.json({ success: false, error: true, mensaje: `Falla de conexión: ${error.message}` }, { status: 200 });
+      } else if (r.status === 404) {
+        // 404 = sin deudas, cliente limpio — esto es correcto
+        bcraData.tieneDeudas = false;
+        bcraData.peorSituacion = "1";
+      } else {
+        console.warn(`[BCRA Deudas] Status inesperado: ${r.status}`);
+      }
+    } else {
+      console.error("[BCRA Deudas] Error:", resDeudas.reason);
     }
+
+    // Procesar cheques
+    if (resCheques.status === "fulfilled") {
+      const r = resCheques.value;
+      if (r.status === 200) {
+        const data = await r.json();
+        if (!bcraData.nombre) bcraData.nombre = data.results?.denominacion || "";
+        const causales = data.results?.causales || [];
+        const todos: any[] = [];
+        causales.forEach((c: any) => {
+          c.entidades?.forEach((ent: any) => {
+            ent.detalle?.forEach((d: any) => {
+              todos.push({
+                causal:       c.causal,
+                nroCheque:    d.nroCheque,
+                monto:        d.monto,
+                fechaRechazo: d.fechaRechazo,
+                fechaPago:    d.fechaPago || null,
+              });
+            });
+          });
+        });
+        bcraData.cheques = todos;
+        bcraData.tieneChequesRechazados = todos.length > 0;
+      }
+      // 404 en cheques = sin cheques rechazados, normal
+    }
+
+    return NextResponse.json({ success: true, bcra: bcraData });
+  } catch (error: any) {
+    console.error("[BCRA] Error:", error.message);
+    return NextResponse.json({
+      success: false,
+      error: true,
+      mensaje: `Error al consultar BCRA: ${error.message}`,
+    }, { status: 200 });
+  }
 }
