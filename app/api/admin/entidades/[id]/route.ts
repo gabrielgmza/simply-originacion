@@ -1,4 +1,3 @@
-// app/api/admin/entidades/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 
@@ -6,8 +5,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const batch = adminDb.batch();
-    const cols = ["usuarios","operaciones","sucursales","fondeadores","credencialesCuad","logs_operaciones"];
-    for (const col of cols) {
+    for (const col of ["usuarios","operaciones","sucursales","fondeadores","credencialesCuad","logs_operaciones"]) {
       const snap = await adminDb.collection(col).where("entidadId","==",id).get();
       snap.docs.forEach(d => batch.delete(d.ref));
     }
@@ -24,14 +22,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
-    await adminDb.collection("entidades").doc(id).update({
-      comisiones: body.comisiones,
-      fechaActualizacion: new Date(),
-    });
+    const u: Record<string, any> = { fechaActualizacion: new Date() };
+
+    if (body.comisiones)         u.comisiones = body.comisiones;
+    if (body.modulosHabilitados) u.modulosHabilitados = body.modulosHabilitados;
+    if (body.datos) {
+      const d = body.datos;
+      if (d.razonSocial)      u.razonSocial = d.razonSocial;
+      if (d.nombreFantasia)   u.nombreFantasia = d.nombreFantasia;
+      if (d.cuit)             u.cuit = d.cuit;
+      if (d.emailContacto)    u["contacto.email"] = d.emailContacto;
+      if (d.telefonoContacto) u["contacto.telefono"] = d.telefonoContacto;
+    }
+
+    await adminDb.collection("entidades").doc(id).update(u);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error("[PATCH comisiones]", e);
+    console.error("[PATCH entidad]", e);
     return NextResponse.json({ error: "Error al guardar" }, { status: 500 });
   }
 }
-
