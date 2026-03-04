@@ -13,88 +13,97 @@ function calcularCuil(dni: string, sexo: string): string {
   return prefijo + dniStr + digito.toString();
 }
 
-async function fetchBcra(path: string) {
-  return fetch(`https://api.bcra.gob.ar${path}`, {
-    headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
-  });
+async function consultarCuil(cuil: string) {
+  const [resDeudas, resCheques] = await Promise.allSettled([
+    fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`, {
+      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
+    }),
+    fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`, {
+      headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" },
+    }),
+  ]);
+
+  const resultado: any = {
+    encontrado: false, cuil, nombre: "", peorSituacion: "1",
+    tieneDeudas: false, detalles: [], cheques: [], tieneChequesRechazados: false,
+  };
+
+  if (resDeudas.status === "fulfilled" && resDeudas.value.status === 200) {
+    const data = await resDeudas.value.json();
+    if (data.results?.denominacion) {
+      resultado.encontrado = true;
+      resultado.nombre = data.results.denominacion;
+      const entidadesVistas = new Set<string>();
+      let peor = 1;
+      for (const periodo of (data.results?.periodos || [])) {
+        for (const e of (periodo.entidades || [])) {
+          const key = `${e.entidad}-${periodo.periodo}`;
+          if (!entidadesVistas.has(key)) {
+            entidadesVistas.add(key);
+            resultado.detalles.push({
+              entidad: e.entidad, situacion: e.situacion,
+              monto: (e.monto || 0) * 1000, diasAtraso: e.diasAtrasoPago || 0,
+              periodo: periodo.periodo,
+            });
+            if (e.situacion > peor) peor = e.situacion;
+          }
+        }
+      }
+      if (resultado.detalles.length > 0) {
+        resultado.tieneDeudas = true;
+        resultado.peorSituacion = peor.toString();
+      }
+    }
+  }
+
+  if (resCheques.status === "fulfilled" && resCheques.value.status === 200) {
+    const data = await resCheques.value.json();
+    if (!resultado.nombre) resultado.nombre = data.results?.denominacion || "";
+    const todos: any[] = [];
+    (data.results?.causales || []).forEach((c: any) => {
+      (c.entidades || []).forEach((ent: any) => {
+        (ent.detalle || []).forEach((d: any) => {
+          todos.push({ causal: c.causal, nroCheque: d.nroCheque, monto: d.monto, fechaRechazo: d.fechaRechazo });
+        });
+      });
+    });
+    resultado.cheques = todos;
+    resultado.tieneChequesRechazados = todos.length > 0;
+    if (todos.length > 0 && !resultado.encontrado) resultado.encontrado = true;
+  }
+
+  return resultado;
 }
 
 export async function POST(req: Request) {
   try {
     const { documento, sexo } = await req.json();
     const docLimpio = documento.replace(/[^0-9]/g, "");
-    const cuil = docLimpio.length >= 10 ? docLimpio : calcularCuil(docLimpio, sexo || "M");
 
-    const [resDeudas, resCheques] = await Promise.allSettled([
-      fetchBcra(`/centraldedeudores/v1.0/Deudas/${cuil}`),
-      fetchBcra(`/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`),
+    // Si ya viene CUIL de 11 dígitos, usarlo directo
+    if (docLimpio.length >= 10) {
+      const r = await consultarCuil(docLimpio);
+      return NextResponse.json({ success: true, bcra: { ...r, error: false } });
+    }
+
+    // Consultar ambos sexos en paralelo para minimizar errores
+    const cuilM = calcularCuil(docLimpio, "M");
+    const cuilF = calcularCuil(docLimpio, "F");
+
+    const [resM, resF] = await Promise.all([
+      consultarCuil(cuilM),
+      consultarCuil(cuilF),
     ]);
 
-    const bcraData: any = {
-      error: false, tieneDeudas: false, peorSituacion: "1",
-      nombre: "", cuil, detalles: [], cheques: [], tieneChequesRechazados: false,
-    };
-
-    // Procesar deudas — leer TODOS los períodos
-    if (resDeudas.status === "fulfilled") {
-      const r = resDeudas.value;
-      if (r.status === 200) {
-        const data = await r.json();
-        bcraData.nombre = data.results?.denominacion || "";
-        const periodos = data.results?.periodos || [];
-
-        // Acumular entidades de todos los períodos, evitando duplicados por entidad
-        const entidadesVistas = new Set<string>();
-        let peor = 1;
-
-        for (const periodo of periodos) {
-          for (const e of (periodo.entidades || [])) {
-            const key = `${e.entidad}-${periodo.periodo}`;
-            if (!entidadesVistas.has(key)) {
-              entidadesVistas.add(key);
-              bcraData.detalles.push({
-                entidad:    e.entidad,
-                situacion:  e.situacion,
-                monto:      (e.monto || 0) * 1000,
-                diasAtraso: e.diasAtrasoPago || 0,
-                periodo:    periodo.periodo,
-              });
-              if (e.situacion > peor) peor = e.situacion;
-            }
-          }
-        }
-
-        if (bcraData.detalles.length > 0) {
-          bcraData.tieneDeudas = true;
-          bcraData.peorSituacion = peor.toString();
-        }
-      }
-      // 404 = sin deudas, normal
+    // Prioridad: el que encontró nombre > el que tiene deudas > masculino por defecto
+    let ganador = resM;
+    if (!resM.encontrado && resF.encontrado) ganador = resF;
+    else if (resM.encontrado && resF.encontrado) {
+      // Ambos encontrados (raro) — usar el que tiene más detalles
+      ganador = resF.detalles.length > resM.detalles.length ? resF : resM;
     }
 
-    // Procesar cheques
-    if (resCheques.status === "fulfilled") {
-      const r = resCheques.value;
-      if (r.status === 200) {
-        const data = await r.json();
-        if (!bcraData.nombre) bcraData.nombre = data.results?.denominacion || "";
-        const todos: any[] = [];
-        (data.results?.causales || []).forEach((c: any) => {
-          (c.entidades || []).forEach((ent: any) => {
-            (ent.detalle || []).forEach((d: any) => {
-              todos.push({
-                causal: c.causal, nroCheque: d.nroCheque,
-                monto: d.monto, fechaRechazo: d.fechaRechazo, fechaPago: d.fechaPago || null,
-              });
-            });
-          });
-        });
-        bcraData.cheques = todos;
-        bcraData.tieneChequesRechazados = todos.length > 0;
-      }
-    }
-
-    return NextResponse.json({ success: true, bcra: bcraData });
+    return NextResponse.json({ success: true, bcra: { ...ganador, error: false } });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: true, mensaje: error.message }, { status: 200 });
   }
