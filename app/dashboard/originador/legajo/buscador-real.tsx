@@ -24,7 +24,7 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
   const [globalLoading, setGlobalLoading] = useState(false);
   const [modalActivo, setModalActivo] = useState<"bcra" | "cuad" | "juicios" | null>(null);
 
-  const urlBot = "https://simply-bot-mendoza-278599265968.us-central1.run.app";
+  const urlBot = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
   const documento = documentoRaw.replace(/[\s\-]/g, '');
 
   const handleInputChange = (e: any) => {

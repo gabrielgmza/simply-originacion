@@ -92,7 +92,7 @@ export default function NuevoLegajoPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documento: dni, sexo }),
       }).then(r => r.json()),
-      fetch("https://simply-bot-mendoza-278599265968.us-central1.run.app/api/consultar-juicios", {
+      fetch("https://simply-bot-mendoza-278599265960.us-central1.run.app/api/consultar-juicios", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dni }),
       }).then(r => r.json()).catch(() => null),
