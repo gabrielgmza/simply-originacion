@@ -34,3 +34,4 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Error al guardar" }, { status: 500 });
   }
 }
+
