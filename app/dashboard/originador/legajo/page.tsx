@@ -26,7 +26,7 @@ const fmt = (n: number) =>
 
 const BOT_URL = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
 
-type Paso = "buscar" | "analizando" | "resultado" | "producto" | "formulario" | "ok";
+type Paso = "buscar" | "analizando" | "resultado" | "producto" | "formulario" | "ok" | "elegir_persona";
 type Producto = "PRIVADO" | "CUAD" | "ADELANTO";
 type ResultadoScoring = "APROBADO" | "OBSERVADO" | "RECHAZADO";
 type ModalTipo = "bcra" | "juicios" | null;
@@ -205,6 +205,7 @@ export default function NuevoLegajoPage() {
   const [stCliente, setStCliente] = useState<"idle"|"procesando"|"ok"|"error">("idle");
   const [cuadData,  setCuadData]  = useState<any>(null);
   const [sinInfoBcra, setSinInfoBcra] = useState(false);
+  const [opcionesBcra, setOpcionesBcra] = useState<any[]>([]);
   const [stCuad,    setStCuad]    = useState<"idle"|"procesando"|"ok"|"error"|"no_empleado">("idle");
 
   const evaluar = async () => {
@@ -230,10 +231,16 @@ export default function NuevoLegajoPage() {
     let dniValido = false;
     if (resBcra.status === "fulfilled" && resBcra.value?.success) {
       const b = resBcra.value.bcra;
+      // Verificar si hay dos personas distintas (ambos CUILs encontraron nombre diferente)
+      if (b.opciones && b.opciones.length > 1) {
+        setOpcionesBcra(b.opciones);
+        setPaso("elegir_persona" as any);
+        return;
+      }
       setBcra(b);
       sit = parseInt(b?.peorSituacion || "1");
       if (b?.nombre) { setNombreCliente(b.nombre); dniValido = true; }
-      else setSinInfoBcra(true); // 404 - no existe en BCRA
+      else setSinInfoBcra(true);
       setStBcra("ok");
     } else setStBcra("error");
     setSituacion(sit);
@@ -329,7 +336,7 @@ export default function NuevoLegajoPage() {
     setPaso("buscar"); setDni(""); setBcra(null); setJuicios(null); setNombreCliente("");
     setProducto(null); setMonto(""); setArchivos({ dniFrente: false, dniDorso: false, recibo: false });
     setStBcra("idle"); setStJuicios("idle"); setStCliente("idle"); setYaCliente(false);
-    setStCuad("idle"); setCuadData(null); setSinInfoBcra(false);
+    setStCuad("idle"); setCuadData(null); setSinInfoBcra(false); setOpcionesBcra([]);
   };
 
   return (
@@ -348,6 +355,33 @@ export default function NuevoLegajoPage() {
         </p>
       </div>
 
+      {/* ELEGIR PERSONA */}
+      {paso === ("elegir_persona" as any) && (
+        <div className="space-y-4">
+          <div className="bg-yellow-900/10 border border-yellow-900/40 rounded-2xl p-4">
+            <p className="text-yellow-400 font-bold text-sm">Se encontraron dos personas con ese DNI</p>
+            <p className="text-xs text-gray-500 mt-1">Seleccioná con cuál querés continuar</p>
+          </div>
+          {opcionesBcra.map((op: any) => (
+            <button key={op.cuil} onClick={() => {
+              setBcra(op); setNombreCliente(op.nombre); setCuil(op.cuil);
+              setSexo(op.cuil.startsWith("27") ? "F" : "M");
+              setPaso("analizando");
+              // Continuar con juicios usando el cuil elegido
+            }}
+              className="w-full bg-[#0A0A0A] border border-gray-900 hover:border-orange-500 rounded-2xl p-5 text-left transition-all">
+              <p className="font-black text-white">{op.nombre}</p>
+              <p className="text-xs text-gray-500 font-mono mt-1">CUIL {op.cuil} · {op.cuil.startsWith("27") ? "Femenino" : "Masculino"}</p>
+              {op.tieneDeudas && <p className="text-xs text-red-400 mt-1">Situación {op.peorSituacion} · Con deudas</p>}
+            </button>
+          ))}
+          <button onClick={resetear}
+            className="w-full py-3 rounded-xl font-bold text-gray-500 hover:text-white text-sm flex items-center justify-center gap-2">
+            <ArrowLeft size={14}/> Nueva consulta
+          </button>
+        </div>
+      )}
+
       {/* BUSCAR */}
       {paso === "buscar" && (
         <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-6 space-y-4">
@@ -356,18 +390,7 @@ export default function NuevoLegajoPage() {
             <input type="number" value={dni} onChange={e => setDni(e.target.value)} placeholder="DNI sin puntos"
               className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 text-white text-lg font-mono outline-none focus:border-orange-500"/>
           </div>
-          <div>
-            <label className="text-xs text-gray-500 uppercase font-bold tracking-widest block mb-1.5">Sexo (del DNI)</label>
-            <div className="flex gap-3">
-              {["M","F"].map(s => (
-                <button key={s} onClick={() => setSexo(s)}
-                  className={`flex-1 py-3 rounded-xl font-bold text-sm border transition-all ${sexo === s ? "text-white border-transparent" : "text-gray-500 border-gray-800 hover:text-white"}`}
-                  style={sexo === s ? { backgroundColor: color } : {}}>
-                  {s === "M" ? "Masculino" : "Femenino"}
-                </button>
-              ))}
-            </div>
-          </div>
+
           <button onClick={evaluar} disabled={dni.length < 7}
             className="w-full py-4 rounded-xl font-black text-white flex items-center justify-center gap-2 disabled:opacity-30"
             style={{ backgroundColor: color }}>

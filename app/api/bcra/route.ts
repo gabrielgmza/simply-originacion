@@ -86,7 +86,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, bcra: { ...r, error: false } });
     }
 
-    // Consultar ambos sexos en paralelo para minimizar errores
+    // Consultar ambos sexos en paralelo
     const cuilM = calcularCuil(docLimpio, "M");
     const cuilF = calcularCuil(docLimpio, "F");
 
@@ -95,13 +95,16 @@ export async function POST(req: Request) {
       consultarCuil(cuilF),
     ]);
 
-    // Prioridad: el que encontró nombre > el que tiene deudas > masculino por defecto
+    const ambosTienenNombre = resM.encontrado && resF.encontrado && resM.nombre !== resF.nombre;
+
+    if (ambosTienenNombre) {
+      // Dos personas distintas con el mismo DNI — devolver opciones para que el vendedor elija
+      return NextResponse.json({ success: true, bcra: { opciones: [resM, resF], error: false } });
+    }
+
+    // Un solo resultado — usar el que encontró nombre, si ninguno usar masculino
     let ganador = resM;
     if (!resM.encontrado && resF.encontrado) ganador = resF;
-    else if (resM.encontrado && resF.encontrado) {
-      // Ambos encontrados (raro) — usar el que tiene más detalles
-      ganador = resF.detalles.length > resM.detalles.length ? resF : resM;
-    }
 
     return NextResponse.json({ success: true, bcra: { ...ganador, error: false } });
   } catch (error: any) {
