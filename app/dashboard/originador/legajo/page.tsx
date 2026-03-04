@@ -52,7 +52,7 @@ function Modal({ tipo, bcra, juicios, onClose }: { tipo: ModalTipo; bcra: any; j
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-black rounded-xl p-3 border border-gray-900">
                   <p className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">Situación</p>
-                  <p className={`text-2xl font-black ${parseInt(bcra.peorSituacion) <= 2 ? "text-green-400" : "text-red-400"}`}>
+                  <p className={`text-2xl font-black ${parseInt(bcra.peorSituacion) <= 2 ? "text-green-400" : parseInt(bcra.peorSituacion) === 3 ? "text-yellow-400" : "text-red-400"}`}>
                     {bcra.peorSituacion}
                   </p>
                   <p className="text-[10px] text-gray-600 mt-0.5">
@@ -324,7 +324,7 @@ export default function NuevoLegajoPage() {
         <div className="bg-[#0A0A0A] border border-gray-900 rounded-2xl p-6 space-y-4">
           <div>
             <label className="text-xs text-gray-500 uppercase font-bold tracking-widest block mb-1.5">DNI</label>
-            <input type="number" value={dni} onChange={e => setDni(e.target.value)} placeholder="Ej: 33094813"
+            <input type="number" value={dni} onChange={e => setDni(e.target.value)} placeholder="DNI sin puntos"
               className="w-full bg-black border border-gray-800 rounded-xl px-4 py-3 text-white text-lg font-mono outline-none focus:border-orange-500"/>
           </div>
           <div>
