@@ -148,28 +148,28 @@ function Modal({ tipo, bcra, juicios, onClose }: { tipo: ModalTipo; bcra: any; j
 }
 
 // ── Card de consulta ─────────────────────────────────────────
-function CardConsulta({ icono, titulo, status, resumen, onClick }: {
+function CardConsulta({ icono, titulo, status, resumen, sinInfo, onClick }: {
   icono: React.ReactNode; titulo: string;
   status: "idle"|"procesando"|"ok"|"error";
-  resumen?: string; onClick?: () => void;
+  resumen?: string; sinInfo?: boolean; onClick?: () => void;
 }) {
-  const colores = {
-    idle:       "border-gray-800 text-gray-500",
-    procesando: "border-gray-700 text-gray-400",
-    ok:         "border-green-900/50 text-green-400",
-    error:      "border-red-900/50 text-red-400",
-  };
+  const borde = sinInfo ? "border-purple-900/50 text-purple-400"
+    : status === "idle"       ? "border-gray-800 text-gray-500"
+    : status === "procesando" ? "border-gray-700 text-gray-400"
+    : status === "ok"         ? "border-green-900/50 text-green-400"
+    :                           "border-red-900/50 text-red-400";
   return (
     <button onClick={onClick} disabled={status === "idle" || status === "procesando"}
-      className={`bg-[#0A0A0A] border rounded-2xl p-4 text-left transition-all w-full ${colores[status]} ${status === "ok" ? "hover:border-green-700 cursor-pointer" : "cursor-default"}`}>
+      className={`bg-[#0A0A0A] border rounded-2xl p-4 text-left transition-all w-full ${borde} ${status === "ok" ? "hover:border-green-700 cursor-pointer" : "cursor-default"}`}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">{icono} {titulo}</div>
         {status === "procesando" && <Loader2 size={13} className="animate-spin"/>}
-        {status === "ok"    && <CheckCircle2 size={13} className="text-green-400"/>}
-        {status === "error" && <AlertTriangle size={13} className="text-red-400"/>}
+        {status === "ok" && !sinInfo && <CheckCircle2 size={13} className="text-green-400"/>}
+        {sinInfo           && <span className="text-[10px] font-black text-purple-400 bg-purple-900/20 px-2 py-0.5 rounded-full">SIN INFO</span>}
+        {status === "error"&& <AlertTriangle size={13} className="text-red-400"/>}
       </div>
-      {resumen && <p className="text-sm font-bold">{resumen}</p>}
-      {status === "ok" && <p className="text-[10px] text-gray-600 mt-1">Presioná para ver detalle →</p>}
+      {resumen && <p className={`text-sm font-bold ${sinInfo ? "text-purple-400" : ""}`}>{sinInfo ? "Sin información en el sistema financiero" : resumen}</p>}
+      {status === "ok" && !sinInfo && <p className="text-[10px] text-gray-600 mt-1">Presioná para ver detalle →</p>}
       {status === "error" && <p className="text-[10px] text-red-500 mt-1">Error al consultar</p>}
     </button>
   );
@@ -204,6 +204,7 @@ export default function NuevoLegajoPage() {
   const [stJuicios, setStJuicios] = useState<"idle"|"procesando"|"ok"|"error">("idle");
   const [stCliente, setStCliente] = useState<"idle"|"procesando"|"ok"|"error">("idle");
   const [cuadData,  setCuadData]  = useState<any>(null);
+  const [sinInfoBcra, setSinInfoBcra] = useState(false);
   const [stCuad,    setStCuad]    = useState<"idle"|"procesando"|"ok"|"error"|"no_empleado">("idle");
 
   const evaluar = async () => {
@@ -232,6 +233,7 @@ export default function NuevoLegajoPage() {
       setBcra(b);
       sit = parseInt(b?.peorSituacion || "1");
       if (b?.nombre) { setNombreCliente(b.nombre); dniValido = true; }
+      else setSinInfoBcra(true); // 404 - no existe en BCRA
       setStBcra("ok");
     } else setStBcra("error");
     setSituacion(sit);
@@ -327,7 +329,7 @@ export default function NuevoLegajoPage() {
     setPaso("buscar"); setDni(""); setBcra(null); setJuicios(null); setNombreCliente("");
     setProducto(null); setMonto(""); setArchivos({ dniFrente: false, dniDorso: false, recibo: false });
     setStBcra("idle"); setStJuicios("idle"); setStCliente("idle"); setYaCliente(false);
-    setStCuad("idle"); setCuadData(null);
+    setStCuad("idle"); setCuadData(null); setSinInfoBcra(false);
   };
 
   return (
@@ -404,7 +406,8 @@ export default function NuevoLegajoPage() {
           <div className="grid grid-cols-1 gap-3">
             <CardConsulta
               icono={<Building2 size={13}/>} titulo="Situación BCRA" status={stBcra}
-              resumen={bcra ? `Situación ${bcra.peorSituacion} · ${bcra.tieneDeudas ? "Con deudas" : "Sin deudas"}${bcra.tieneChequesRechazados ? " · Cheques rechazados" : ""}` : undefined}
+              resumen={sinInfoBcra ? "⬡ SIN INFORMACIÓN EN BCRA" : bcra ? `Situación ${bcra.peorSituacion} · ${bcra.tieneDeudas ? "Con deudas" : "Sin deudas"}${bcra.tieneChequesRechazados ? " · Cheques rechazados" : ""}` : undefined}
+              sinInfo={sinInfoBcra}
               onClick={() => setModal("bcra")}
             />
             <CardConsulta
