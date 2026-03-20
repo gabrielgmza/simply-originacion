@@ -26,7 +26,6 @@ function calcularCuil(dni: string, sexo: string): string {
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 
-const BOT_URL = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
 
 type Paso = "buscar" | "analizando" | "resultado" | "producto" | "formulario" | "ok" | "elegir_persona";
 type Producto = "PRIVADO" | "CUAD" | "ADELANTO";
@@ -321,13 +320,13 @@ export default function NuevoLegajoPage() {
           return;
         }
         const cred = snapCreds.docs[0].data();
-        const res = await fetch("https://simply-bot-mendoza-278599265960.us-central1.run.app/api/simular-cupo", {
+        const res = await fetch("/api/cuad/consultar", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dni, usuario: cred.usuarioGobierno, password: cred.passwordGobierno }),
+          body: JSON.stringify({ dni, sexo, entidadId: entidadData?.id }),
         });
         const data = await res.json();
         if (data.noRegistra) { setStCuad("no_empleado"); }
-        else if (data.success) { setCuadData({ maximo: data.cupoMaximo, iteraciones: data.iteraciones }); setStCuad("ok"); }
+        else if (data.success) { setCuadData({ maximo: data.cupoDisponible, iteraciones: data.iteraciones }); setStCuad("ok"); }
         else setStCuad("error");
       } catch { setStCuad("error"); }
       setPaso("formulario");
