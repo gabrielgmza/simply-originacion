@@ -76,7 +76,6 @@ service cloud.firestore {
       allow write:  if esMaster() || (isAuth() && esGerenteGeneral() && entidadId() == resource.data.entidadId);
     }
 
-    // ── credencialesCuad ──────────────────────────────────────────────────────
     match /credencialesCuad/{credId} {
       allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
       allow create: if esMaster() || (isAuth() && esGerenteGeneral() && entidadId() == request.resource.data.entidadId);
@@ -110,6 +109,33 @@ service cloud.firestore {
       allow delete: if esMaster();
     }
 
+    match /notificaciones/{notifId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if esMaster();
+    }
+
+    match /onboarding_tokens/{tokenId} {
+      allow read:   if true;
+      allow create: if isAuth();
+      allow update: if true;
+      allow delete: if esMaster();
+    }
+
+    match /lotes_liquidacion/{loteId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth() && esStaffEntidad(request.resource.data.entidadId);
+      allow update: if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow delete: if esMaster();
+    }
+
+    match /auditoria/{audId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+
     match /subastas_fondeo/{subId} {
       allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId) || (isAuth() && rol() == 'FONDEADOR');
       allow create: if isAuth() && esStaffEntidad(request.resource.data.entidadId);
@@ -123,6 +149,12 @@ service cloud.firestore {
       allow delete: if esMaster();
     }
 
+    // ── Cache BCRA ────────────────────────────────────────────────────────────
+    match /cache_bcra/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── Logs ──────────────────────────────────────────────────────────────────
     match /logs_operaciones/{logId} {
       allow read:   if esMaster() || esGerenteEntidad(resource.data.entidadId);
       allow create: if isAuth();
@@ -148,7 +180,18 @@ service cloud.firestore {
       allow create: if true;
       allow update, delete: if esMaster();
     }
+    match /logs_whatsapp/{logId} {
+      allow read:   if esMaster() || esGerenteEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update, delete: if esMaster();
+    }
+    match /logs_cron/{logId} {
+      allow read:   if esMaster();
+      allow create: if true;
+      allow update, delete: if esMaster();
+    }
 
+    // ── Deny all ──────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }

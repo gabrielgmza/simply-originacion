@@ -1,40 +1,32 @@
+// app/api/bcra/consultar/route.ts
 import { NextResponse } from "next/server";
+import { consultarBcraConCache } from "@/lib/bcra/consultar-con-cache";
 
 export async function POST(request: Request) {
   try {
-    const { cuil } = await request.json();
-    if (!cuil) return NextResponse.json({ error: "CUIL requerido" }, { status: 400 });
+    const { documento, sexo } = await request.json();
 
-    const res = await fetch(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`, {
-      next: { revalidate: 3600 } 
-    });
-
-    if (!res.ok) {
-      return NextResponse.json({ 
-        denominacionBCRA: "CONSULTA MANUAL REQUERIDA", 
-        situacionCrediticia: 1, 
-        montoDeudaInformada: 0 
-      });
+    if (!documento) {
+      return NextResponse.json({ error: "Falta documento" }, { status: 400 });
     }
 
-    const json = await res.json();
-    let peor = 1;
-    let monto = 0;
+    const result = await consultarBcraConCache(documento, sexo || "M");
 
-    if (json.results?.periodos?.[0]?.entidades) {
-      json.results.periodos[0].entidades.forEach((e: any) => {
-        if (e.situacion > peor) peor = e.situacion;
-        monto += (e.monto || 0) * 1000;
+    if (!result.success) {
+      return NextResponse.json({
+        success: false,
+        error: true,
+        mensaje: result.error || "Error al consultar BCRA",
       });
     }
 
     return NextResponse.json({
-      denominacionBCRA: json.results?.denominacion || "CLIENTE VERIFICADO",
-      situacionCrediticia: peor,
-      montoDeudaInformada: monto,
-      tieneChequesRechazados: false
+      success: true,
+      bcra: result.bcra,
+      fromCache: result.fromCache,
+      cachedAt: result.cachedAt,
     });
-  } catch (e) {
-    return NextResponse.json({ situacionCrediticia: 1, montoDeudaInformada: 0 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: true, mensaje: error.message }, { status: 500 });
   }
 }
