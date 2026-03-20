@@ -305,21 +305,6 @@ export default function NuevoLegajoPage() {
       setPaso("analizando");
       setStCuad("procesando");
       try {
-        // Buscar credencial asignada al vendedor actual
-        const snapCreds = await getDocs(
-          query(collection(db, "credencialesCuad"),
-            where("entidadId", "==", entidadData?.id),
-            where("vendedoresAsignados", "array-contains", userData?.uid),
-            where("activa", "==", true)
-          )
-        );
-        if (snapCreds.empty) {
-          setStCuad("error");
-          setCuadData({ errorMsg: "No tenés una credencial CUAD asignada. Consultá con el gerente." });
-          setPaso("formulario");
-          return;
-        }
-        const cred = snapCreds.docs[0].data();
         const res = await fetch("/api/cuad/consultar", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dni, sexo, entidadId: entidadData?.id }),
