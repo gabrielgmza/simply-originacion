@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
-import { doc, updateDoc, addDoc, collection, serverTimestamp, query, where, getDocs, limit } from "firebase/firestore";
+import { doc, updateDoc, collection, serverTimestamp, query, where, getDocs, limit, addDoc } from "firebase/firestore";
+import { getSession } from "@/lib/auth/session";
+import { validarAccesoEntidad } from "@/lib/auth/validate-entidad";
 
 const BOT_URL = process.env.BOT_URL || "https://simply-bot-mendoza-278599265960.us-central1.run.app";
 
@@ -11,12 +13,17 @@ export async function POST(request: Request) {
     if (!operacionId || !entidadId || !dni || !montoCuota)
       return NextResponse.json({ error: "Faltan parámetros" }, { status: 400 });
 
+    // Validar acceso
+    const session = getSession(request as any);
+    const acceso = validarAccesoEntidad(session, entidadId);
+    if (!acceso.ok) return NextResponse.json({ error: acceso.error }, { status: 403 });
+
     const q = query(collection(db, "credencialesCuad"),
       where("entidadId", "==", entidadId), where("activa", "==", true),
       where("enUsoPorBot", "==", false), limit(1));
     const snap = await getDocs(q);
     if (snap.empty)
-      return NextResponse.json({ error: "Todas las cuentas de gobierno están ocupadas. Reintentá en unos segundos." }, { status: 429 });
+      return NextResponse.json({ error: "Todas las cuentas de gobierno están ocupadas." }, { status: 429 });
 
     const credencialDoc = snap.docs[0];
     credencialUsadaId = credencialDoc.id;
@@ -33,8 +40,8 @@ export async function POST(request: Request) {
       });
       botData = await botRes.json();
     } catch (fetchErr: any) {
-      botData = { success: false, error: fetchErr.name === "AbortError" 
-        ? "Timeout — el sistema de gobierno no respondió a tiempo" 
+      botData = { success: false, error: fetchErr.name === "AbortError"
+        ? "Timeout — el sistema de gobierno no respondió a tiempo"
         : `Error de conexión: ${fetchErr.message}` };
     }
 
@@ -44,7 +51,6 @@ export async function POST(request: Request) {
     if (!botData.success)
       return NextResponse.json({ error: botData.error || "El bot no pudo ejecutar el Alta." });
 
-    // Actualizar operación con datos del Alta
     if (operacionId) {
       await updateDoc(doc(db, "operaciones", operacionId), {
         "documentos.cad_codigo": botData.codigoCAD || "",
@@ -63,10 +69,9 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    console.error("[CUAD reservar]", error);
     if (credencialUsadaId) {
       await updateDoc(doc(db, "credencialesCuad", credencialUsadaId), { enUsoPorBot: false }).catch(console.error);
     }
-    return NextResponse.json({ error: "Error interno del servidor." }, { status: 500 });
+    return NextResponse.json({ error: "Error interno." }, { status: 500 });
   }
 }
