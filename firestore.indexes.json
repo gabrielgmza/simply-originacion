@@ -8,6 +8,202 @@
         { "fieldPath": "vendedoresAsignados", "arrayConfig": "CONTAINS" },
         { "fieldPath": "activa", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "credencialesCuad",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "activa", "order": "ASCENDING" },
+        { "fieldPath": "enUsoPorBot", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operacionId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operacionId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operacionId", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operacionId", "order": "ASCENDING" },
+        { "fieldPath": "tipo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "origen", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pagos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "fechaCreacion", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "onboarding_tokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "legajoId", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "magic_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operacionId", "order": "ASCENDING" },
+        { "fieldPath": "usado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "fondeadores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "activo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "fechaCreacion", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "cliente.dni", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "estadoAprobacion", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fondeo.fondeadorId", "order": "ASCENDING" },
+        { "fieldPath": "fechaCreacion", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fondeo.fondeadorId", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "operaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "pagos360.estadoAdhesion", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "auditoria",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "operacionId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "usuarios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "rol", "order": "ASCENDING" },
+        { "fieldPath": "activo", "order": "ASCENDING" },
+        { "fieldPath": "fechaCreacion", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "leida", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "logs_whatsapp",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "logs_cron",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tipo", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lotes_liquidacion",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entidadId", "order": "ASCENDING" },
+        { "fieldPath": "fechaCreacion", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
