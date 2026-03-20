@@ -24,7 +24,7 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
   const [globalLoading, setGlobalLoading] = useState(false);
   const [modalActivo, setModalActivo] = useState<"bcra" | "cuad" | "juicios" | null>(null);
 
-  const urlBot = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
+  const urlBot = "/api/cuad";
   const documento = documentoRaw.replace(/[\s\-]/g, '');
 
   const handleInputChange = (e: any) => {
@@ -69,7 +69,7 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
     try {
       const res = await fetch(`${urlBot}/api/simular-cupo`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dni: documento, usuario: "Amarque", password: "uni66" })
+        body: JSON.stringify({ dni: documento, entidadId: "TODO_ENTIDAD_ID" })
       });
       const data = await res.json();
       if (data.error) setStatusBot("error");

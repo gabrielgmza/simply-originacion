@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { setSessionCookie } from "@/lib/auth/session";
+import { rateLimit } from "@/lib/rate-limit";
 
 const DESTINOS: Record<string, string> = {
   MASTER_PAYSUR:    "/admin",
@@ -14,6 +15,19 @@ const DESTINOS: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting por IP — max 10 intentos por minuto
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || request.headers.get("x-real-ip")
+      || "unknown";
+    
+    const { ok, remaining } = rateLimit(`login:${ip}`, 10, 60000);
+    if (!ok) {
+      return NextResponse.json(
+        { error: "Demasiados intentos de login. Esperá un minuto." },
+        { status: 429, headers: { "Retry-After": "60" } }
+      );
+    }
+
     const { uid } = await request.json();
     if (!uid) return NextResponse.json({ error: "Falta uid" }, { status: 400 });
 

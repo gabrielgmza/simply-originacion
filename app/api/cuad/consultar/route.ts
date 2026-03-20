@@ -2,35 +2,42 @@ import { NextResponse } from "next/server";
 import { collection, query, where, getDocs, doc, updateDoc, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+const BOT_URL = process.env.BOT_URL || "https://simply-bot-mendoza-278599265960.us-central1.run.app";
+
+// Período de cierre mensual del gobierno (~16 al ~25)
+function esPeriodoCierreGobierno(): boolean {
+  const dia = new Date().getDate();
+  return dia >= 16 && dia <= 25;
+}
+
 export async function POST(request: Request) {
-  let credencialUsadaId = null;
+  let credencialUsadaId: string | null = null;
 
   try {
-    const payload = await request.json();
-    const { dni, entidadId } = payload;
+    const { dni, entidadId, sexo } = await request.json();
 
     if (!dni || !entidadId) {
-      return NextResponse.json({ error: "Faltan parametros (DNI o Entidad)" }, { status: 400 });
+      return NextResponse.json({ error: "Faltan parámetros (DNI o Entidad)" }, { status: 400 });
     }
 
-    // 1. Buscar una credencial de gobierno que este LIBRE
+    // 1. Buscar credencial de gobierno LIBRE
     const q = query(
-      collection(db, "credencialesCuad"), 
+      collection(db, "credencialesCuad"),
       where("entidadId", "==", entidadId),
       where("activa", "==", true),
       where("enUsoPorBot", "==", false),
       limit(1)
     );
-    
+
     const credencialesSnap = await getDocs(q);
 
     if (credencialesSnap.empty) {
-      return NextResponse.json({ 
-        error: "Todas las cuentas de gobierno estan ocupadas o no hay credenciales configuradas. Intenta en unos segundos." 
+      return NextResponse.json({
+        error: "Todas las cuentas de gobierno están ocupadas o no hay credenciales configuradas. Intentá en unos segundos."
       }, { status: 429 });
     }
 
-    // 2. Bloquear la credencial para este hilo de ejecucion
+    // 2. Bloquear credencial
     const credencialDoc = credencialesSnap.docs[0];
     credencialUsadaId = credencialDoc.id;
     const credencialData = credencialDoc.data();
@@ -39,42 +46,101 @@ export async function POST(request: Request) {
       enUsoPorBot: true
     });
 
-    // 3. --- AQUI INICIA LA MAGIA DEL BOT (Simulacion RPA) ---
-    // En produccion, aqui hariamos un fetch() a tu servidor externo de Puppeteer
-    // pasandole credencialData.usuarioGobierno y credencialData.passwordGobierno
-    
-    console.log(`[BOT] Iniciando login en Mendoza con usuario: ${credencialData.usuarioGobierno}...`);
-    await new Promise(resolve => setTimeout(resolve, 3500)); // Simulando resolucion de Captcha y Login
-    
-    console.log(`[BOT] Buscando bono de sueldo para DNI: ${dni}...`);
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulando lectura de haberes
+    // 3. Llamar al bot REAL
+    console.log(`[CUAD] DNI=${dni} usuario=${credencialData.usuarioGobierno} entidad=${entidadId}`);
 
-    // Generamos un cupo simulado para la prueba
-    const tieneCupo = Math.random() > 0.2; // 80% de probabilidad de tener cupo
-    const cupoDisponible = tieneCupo ? Math.floor(Math.random() * (250000 - 30000 + 1) + 30000) : 0;
-    
-    // 4. --- FIN DEL BOT ---
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 240000); // 4 min timeout
 
-    // 5. Liberar la credencial para que otro vendedor pueda usarla
+    let botResponse;
+    try {
+      const res = await fetch(`${BOT_URL}/api/simular-cupo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dni,
+          usuario: credencialData.usuarioGobierno,
+          password: credencialData.passwordGobierno,
+        }),
+        signal: controller.signal,
+      });
+      botResponse = await res.json();
+    } catch (fetchError: any) {
+      if (fetchError.name === "AbortError") {
+        botResponse = { success: false, error: true, mensaje: "Timeout — el sistema de gobierno no respondió a tiempo" };
+      } else {
+        botResponse = { success: false, error: true, mensaje: `Error de conexión con el bot: ${fetchError.message}` };
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    // 4. Liberar credencial
     await updateDoc(doc(db, "credencialesCuad", credencialUsadaId), {
       enUsoPorBot: false
     });
 
-    return NextResponse.json({ 
-      dni: dni,
-      cupoDisponible: cupoDisponible,
-      estado: tieneCupo ? "APTO" : "SIN_CUPO",
-      detalles: "Lectura exitosa del bono de sueldo"
-    }, { status: 200 });
+    // 5. Procesar respuesta
+    const warning = esPeriodoCierreGobierno()
+      ? "⚠️ Estamos en período de cierre mensual del sistema de gobierno (~16 al ~25). Los resultados pueden ser inexactos."
+      : undefined;
+
+    if (botResponse.error) {
+      // Determinar si es gobierno caído o error del bot
+      const mensaje = botResponse.mensaje || "Error desconocido";
+      const esGobiernoCaido =
+        mensaje.includes("Timeout") ||
+        mensaje.includes("timeout") ||
+        mensaje.includes("net::ERR") ||
+        mensaje.includes("Navigation timeout") ||
+        mensaje.includes("Screen check falló") ||
+        mensaje.includes("Modo=M no apareció");
+
+      return NextResponse.json({
+        success: false,
+        error: true,
+        mensaje: esGobiernoCaido
+          ? "El sistema de gobierno no está disponible en este momento. Intentá más tarde."
+          : mensaje,
+        gobiernoNoDisponible: esGobiernoCaido,
+        warning,
+      });
+    }
+
+    if (botResponse.noRegistra) {
+      return NextResponse.json({
+        success: true,
+        dni,
+        cupoDisponible: 0,
+        estado: "NO_REGISTRA",
+        noRegistra: true,
+        detalles: "El DNI no registra como empleado público en el sistema de gobierno.",
+        warning,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      dni,
+      cupoDisponible: botResponse.cupoMaximo || 0,
+      estado: botResponse.cupoMaximo > 0 ? "APTO" : "SIN_CUPO",
+      nombre: botResponse.nombre || "",
+      iteraciones: botResponse.iteraciones || 0,
+      detalles: "Consulta exitosa al sistema de gobierno.",
+      warning,
+    });
 
   } catch (error: any) {
-    console.error("Error en orquestador CUAD:", error);
-    
-    // Si algo falla y el script explota, nos aseguramos de liberar la credencial
+    console.error("[CUAD] Error:", error);
+
     if (credencialUsadaId) {
       await updateDoc(doc(db, "credencialesCuad", credencialUsadaId), { enUsoPorBot: false }).catch(console.error);
     }
 
-    return NextResponse.json({ error: "Error interno en el motor de Scraping" }, { status: 500 });
+    return NextResponse.json({ 
+      success: false,
+      error: true,
+      mensaje: "Error interno del servidor. Intentá de nuevo." 
+    }, { status: 500 });
   }
 }
