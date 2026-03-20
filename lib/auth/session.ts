@@ -1,11 +1,13 @@
 // lib/auth/session.ts
-// Graba/lee una cookie de sesión liviana con rol, entidadId y uid
-// El middleware la usa para proteger rutas sin llamar a Firebase
+// Cookie de sesión firmada con HMAC — no se puede falsificar sin SESSION_SECRET
+// Para producción: agregar SESSION_SECRET en Vercel env vars (cualquier string largo random)
 
 import { NextResponse } from "next/server";
+import { createHmac } from "crypto";
 
 const COOKIE_NAME = "ps_session";
-const MAX_AGE    = 60 * 60 * 8; // 8 horas
+const MAX_AGE     = 60 * 60 * 8; // 8 horas
+const SECRET      = process.env.SESSION_SECRET || "simply-default-secret-cambiar-en-produccion";
 
 export interface SessionPayload {
   uid:       string;
@@ -14,22 +16,30 @@ export interface SessionPayload {
   nombre?:   string;
 }
 
-// ── Codificación simple Base64 (no requiere crypto en Edge) ──────────────────
-// Para producción con datos sensibles se puede cambiar a JWT con JOSE
+// ── Firma HMAC ──
+function sign(data: string): string {
+  return createHmac("sha256", SECRET).update(data).digest("hex");
+}
 
 function encode(payload: SessionPayload): string {
-  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig  = sign(data);
+  return `${data}.${sig}`;
 }
 
 function decode(value: string): SessionPayload | null {
   try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf-8"));
+    const [data, sig] = value.split(".");
+    if (!data || !sig) return null;
+    // Verificar firma
+    if (sign(data) !== sig) return null;
+    return JSON.parse(Buffer.from(data, "base64url").toString("utf-8"));
   } catch {
     return null;
   }
 }
 
-// ── Grabar cookie (llamar desde el login page tras autenticar) ───────────────
+// ── Grabar cookie ──
 export function setSessionCookie(
   response: NextResponse,
   payload:  SessionPayload
@@ -44,14 +54,14 @@ export function setSessionCookie(
   return response;
 }
 
-// ── Leer cookie (usada en middleware y API routes) ───────────────────────────
+// ── Leer cookie ──
 export function getSession(request: { cookies: { get: (name: string) => { value: string } | undefined } }): SessionPayload | null {
   const cookie = request.cookies.get(COOKIE_NAME);
   if (!cookie?.value) return null;
   return decode(cookie.value);
 }
 
-// ── Borrar cookie (logout) ───────────────────────────────────────────────────
+// ── Borrar cookie ──
 export function clearSessionCookie(response: NextResponse): NextResponse {
   response.cookies.set(COOKIE_NAME, "", { maxAge: 0, path: "/" });
   return response;
