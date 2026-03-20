@@ -1,13 +1,20 @@
 "use client";
 import { useState } from "react";
-import { Search, Gavel, Landmark, LandmarkIcon, Briefcase, Loader2, AlertTriangle, X, RefreshCw, AlertCircle, FileText, Download } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Search, Gavel, Landmark, LandmarkIcon, Briefcase, Loader2, AlertTriangle, X, RefreshCw, AlertCircle, FileText, Download, Info } from "lucide-react";
 
-// Agregamos la prop al componente
 interface Props {
   alBuscarExitosamente?: (dni: string) => void;
 }
 
+// Período de cierre mensual del gobierno (~16 al ~25)
+function esPeriodoCierre(): boolean {
+  const dia = new Date().getDate();
+  return dia >= 16 && dia <= 25;
+}
+
 export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
+  const { entidadData } = useAuth();
   const [documentoRaw, setDocumentoRaw] = useState("");
   const [sexo, setSexo] = useState("M");
   const [errorInput, setErrorInput] = useState("");
@@ -16,15 +23,17 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
   const [bcraData, setBcraData] = useState<any>(null);
   const [juiciosData, setJuiciosData] = useState<any>(null);
   const [cupoData, setCupoData] = useState<any>(null);
+  const [cuadWarning, setCuadWarning] = useState<string | null>(null);
   
   const [statusBcra, setStatusBcra] = useState<"idle" | "procesando" | "completado" | "error">("idle");
   const [statusJuicios, setStatusJuicios] = useState<"idle" | "procesando" | "completado" | "error">("idle");
-  const [statusBot, setStatusBot] = useState<"idle" | "procesando" | "completado" | "error" | "no_empleado">("idle");
+  const [statusBot, setStatusBot] = useState<"idle" | "procesando" | "completado" | "error" | "no_empleado" | "gobierno_caido">("idle");
 
   const [globalLoading, setGlobalLoading] = useState(false);
   const [modalActivo, setModalActivo] = useState<"bcra" | "cuad" | "juicios" | null>(null);
 
-  const urlBot = "/api/cuad";
+  // BCRA y Juicios van directo al bot (no necesitan credenciales de entidad)
+  const urlBot = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
   const documento = documentoRaw.replace(/[\s\-]/g, '');
 
   const handleInputChange = (e: any) => {
@@ -64,18 +73,29 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
     } catch { setStatusJuicios("error"); }
   };
 
+  // CUAD va por API interna que gestiona credenciales de la entidad
   const consultarCupo = async () => {
     setStatusBot("procesando");
+    setCuadWarning(null);
     try {
-      const res = await fetch(`${urlBot}/api/simular-cupo`, {
+      const res = await fetch('/api/cuad/consultar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dni: documento, entidadId: "TODO_ENTIDAD_ID" })
+        body: JSON.stringify({ dni: documento, sexo, entidadId: entidadData?.id })
       });
       const data = await res.json();
-      if (data.error) setStatusBot("error");
-      else if (data.noRegistra) setStatusBot("no_empleado");
-      else if (data.success) {
-        setCupoData({ maximo: data.cupoMaximo, iteraciones: data.iteraciones });
+
+      // Guardar warning de cierre mensual si viene
+      if (data.warning) setCuadWarning(data.warning);
+
+      if (data.gobiernoNoDisponible) {
+        setStatusBot("gobierno_caido");
+      } else if (data.error) {
+        setStatusBot("error");
+      } else if (data.noRegistra) {
+        setStatusBot("no_empleado");
+      } else if (data.success) {
+        setCupoData({ maximo: data.cupoDisponible, iteraciones: data.iteraciones, nombre: data.nombre });
+        if (data.nombre && !nombreCliente) setNombreCliente(data.nombre);
         setStatusBot("completado");
       }
     } catch { setStatusBot("error"); }
@@ -83,24 +103,21 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
 
   const consultarTodo = async () => {
     if (documento.length < 7) return alert("Ingrese DNI o CUIL válido");
+    if (!entidadData?.id) return alert("Error: no se detectó la entidad. Recargá la página.");
     
-    // Limpiamos los estados anteriores
     setNombreCliente("");
     setBcraData(null);
     setJuiciosData(null);
     setCupoData(null);
+    setCuadWarning(null);
     setStatusBcra("idle");
     setStatusJuicios("idle");
     setStatusBot("idle");
     
     setGlobalLoading(true);
     
-    // Disparamos las consultas en paralelo
     Promise.allSettled([consultarBCRA(), consultarJuicios(), consultarCupo()]).then(() => {
         setGlobalLoading(false);
-        
-        // ¡ACA ESTA EL CAMBIO!: Si no hay errores críticos, avisamos que la búsqueda fue exitosa
-        // Para simplificar, asumimos éxito si el BCRA contestó (aunque sea con deudas)
         if(statusBcra !== "error" && documento.length >= 7) {
             if(alBuscarExitosamente) alBuscarExitosamente(documento);
         }
@@ -109,6 +126,25 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* AVISO CIERRE GOBIERNO */}
+      {esPeriodoCierre() && (
+        <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-2xl p-4 flex items-start gap-3">
+          <Info size={18} className="text-yellow-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-yellow-400 font-bold text-sm">Período de cierre del sistema de gobierno</p>
+            <p className="text-yellow-600 text-xs mt-1">Del ~16 al ~25 de cada mes el sistema puede estar inestable o devolver datos inexactos. Las consultas se intentarán igual.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Warning del API si vino */}
+      {cuadWarning && !esPeriodoCierre() && (
+        <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-2xl p-3 flex items-center gap-2">
+          <AlertTriangle size={14} className="text-yellow-500" />
+          <p className="text-yellow-500 text-xs font-bold">{cuadWarning}</p>
+        </div>
+      )}
+
       {/* BUSCADOR */}
       <div className="flex flex-col gap-2">
         <div className="flex flex-col md:flex-row gap-4 bg-[#0A0A0A] p-6 rounded-[32px] border border-gray-800">
@@ -138,17 +174,18 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
           
           {/* CUPO MENDOZA */}
-          <div onClick={() => statusBot === "completado" && setModalActivo("cuad")} className={`bg-[#0A0A0A] border ${statusBot === "error" ? 'border-red-900' : 'border-gray-800'} rounded-[32px] p-6 relative ${statusBot === "completado" ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}>
+          <div onClick={() => statusBot === "completado" && setModalActivo("cuad")} className={`bg-[#0A0A0A] border ${statusBot === "error" || statusBot === "gobierno_caido" ? 'border-red-900' : 'border-gray-800'} rounded-[32px] p-6 relative ${statusBot === "completado" ? 'cursor-pointer hover:border-blue-500 transition-colors' : ''}`}>
             <div className="flex justify-between items-start mb-4">
                <h3 className="text-gray-500 font-black uppercase text-[10px] tracking-widest flex items-center gap-2"><Briefcase size={14}/> Cupo Mendoza</h3>
-               {statusBot === "error" && <button onClick={(e)=>{e.stopPropagation(); consultarCupo();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50 transition-colors"><RefreshCw size={14}/></button>}
+               {(statusBot === "error" || statusBot === "gobierno_caido") && <button onClick={(e)=>{e.stopPropagation(); consultarCupo();}} className="bg-red-900/30 text-red-500 p-2 rounded-lg hover:bg-red-900/50 transition-colors"><RefreshCw size={14}/></button>}
             </div>
             {statusBot === "procesando" && <p className="text-blue-500 font-bold animate-pulse text-sm">Validando portal...</p>}
             {statusBot === "no_empleado" && <p className="text-orange-500 font-bold text-sm italic">No registra legajo</p>}
+            {statusBot === "gobierno_caido" && <p className="text-yellow-500 font-bold text-sm flex flex-col gap-1"><AlertTriangle size={16}/> GOBIERNO NO DISPONIBLE</p>}
             {statusBot === "error" && <p className="text-red-500 font-bold text-sm flex flex-col gap-1"><AlertTriangle size={16}/> PROVEEDOR CON PROBLEMAS</p>}
             {statusBot === "completado" && cupoData && (
               <div>
-                <p className="text-4xl font-black text-white font-mono">${cupoData.maximo.toLocaleString('es-AR')}</p>
+                <p className="text-4xl font-black text-white font-mono">${cupoData.maximo?.toLocaleString('es-AR')}</p>
               </div>
             )}
           </div>
@@ -218,6 +255,18 @@ export default function BuscadorScoringReal({ alBuscarExitosamente }: Props) {
                     ))}
                   </div>
                 ) : <p className="text-green-500">El cliente no registra deudas en el sistema financiero.</p>}
+              </>
+            )}
+
+            {/* Modal CUAD */}
+            {modalActivo === 'cuad' && cupoData && (
+              <>
+                <h2 className="text-2xl font-black text-white mb-4 uppercase flex items-center gap-2"><Briefcase/> Cupo Gobierno Mendoza</h2>
+                <div className="bg-black p-6 rounded-xl border border-gray-800 text-center">
+                  <p className="text-gray-400 text-sm mb-2">Cupo máximo disponible</p>
+                  <p className="text-5xl font-black text-white font-mono">${cupoData.maximo?.toLocaleString('es-AR')}</p>
+                  {cupoData.nombre && <p className="text-gray-500 text-sm mt-2">{cupoData.nombre}</p>}
+                </div>
               </>
             )}
 
