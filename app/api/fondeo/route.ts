@@ -1,5 +1,5 @@
 // app/api/fondeo/route.ts
-// POST /api/fondeo  → calcular ofertas para una operación
+// POST /api/fondeo  → calcular ofertas para una operación (filtra por producto)
 // PATCH /api/fondeo → asignar fondeador a operación
 
 import { NextResponse } from "next/server";
@@ -16,9 +16,8 @@ import { dispararEmail } from "@/lib/email/motor";
 // ── POST: calcular ofertas ────────────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
-    const { operacionId, entidadId } = await request.json();
+    const { operacionId, entidadId, producto } = await request.json();
 
-    // Validar acceso
     const session = getSession(request as any);
     const acceso = validarAccesoEntidad(session, entidadId);
     if (!acceso.ok) return NextResponse.json({ error: acceso.error }, { status: 403 });
@@ -30,10 +29,12 @@ export async function POST(request: Request) {
 
     if (!opSnap.exists()) return NextResponse.json({ error: "Operación no encontrada" }, { status: 404 });
 
-    const op    = opSnap.data() as any;
+    const op     = opSnap.data() as any;
     const monto  = op.financiero?.montoSolicitado || 0;
     const cuotas = op.financiero?.cuotas          || 12;
     const score  = op.scoring?.puntaje            || 0;
+    // Producto: del body, de la operación, o default
+    const tipoProducto = producto || op.tipo || "PRIVADO";
 
     const fondeadores = await Promise.all(fondSnap.docs.map(async d => {
       const f = { id: d.id, ...d.data() } as any;
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       return f;
     }));
 
-    const ofertas = calcularOfertas(monto, cuotas, score, fondeadores);
+    const ofertas = calcularOfertas(monto, cuotas, score, fondeadores, tipoProducto);
     return NextResponse.json({ success: true, ofertas });
 
   } catch (error: any) {
@@ -59,7 +60,6 @@ export async function PATCH(request: Request) {
   try {
     const { operacionId, fondeadorId, oferta, usuarioEmail, entidadId } = await request.json();
 
-    // Validar acceso
     const session = getSession(request as any);
     const acceso = validarAccesoEntidad(session, entidadId);
     if (!acceso.ok) return NextResponse.json({ error: acceso.error }, { status: 403 });
@@ -78,7 +78,6 @@ export async function PATCH(request: Request) {
       fechaActualizacion:     serverTimestamp(),
     });
 
-    // Auditoría
     await addDoc(collection(db, "auditoria"), {
       operacionId, entidadId,
       accion:       "FONDEO_ASIGNADO",
@@ -87,7 +86,6 @@ export async function PATCH(request: Request) {
       fecha:        serverTimestamp(),
     });
 
-    // Email al fondeador (no bloquea la respuesta)
     if (fond?.emailNotificacion) {
       dispararEmail(entidadId, "FONDEO_ASIGNADO" as any, fond.emailNotificacion, {
         fondeadorNombre: fond.nombre,

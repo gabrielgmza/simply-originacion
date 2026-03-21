@@ -2,6 +2,7 @@
 // app/dashboard/originacion/SimuladorFinanciero.tsx
 // Conectado al motor real de subasta (/api/fondeo)
 // - Carga ofertas reales con cupo, scoring y TNA de cada fondeador
+// - Filtra por producto (CUAD, PRIVADO, ADELANTO)
 // - Selección automática del óptimo (menor cuota)
 // - El vendedor puede cambiar manualmente
 
@@ -17,6 +18,7 @@ interface Props {
   scoreCliente: number;   // puntaje scoring del cliente (0-1000)
   entidadId:    string;
   operacionId?: string;   // si ya existe la op, para asignar al confirmar
+  producto?:    string;   // "CUAD" | "PRIVADO" | "ADELANTO"
   colorPrimario?: string;
   onConfirm:    (oferta: any) => void;
 }
@@ -25,14 +27,14 @@ const fmt  = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", 
 const fmtM = (n: number) => n >= 1_000_000 ? `$${(n/1_000_000).toFixed(1)}M` : `$${(n/1000).toFixed(0)}K`;
 
 export default function SimuladorFinanciero({
-  monto, cuotas, scoreCliente, entidadId, operacionId, colorPrimario = "#FF5E14", onConfirm
+  monto, cuotas, scoreCliente, entidadId, operacionId, producto, colorPrimario = "#FF5E14", onConfirm
 }: Props) {
   const [ofertas,           setOfertas]           = useState<any[]>([]);
   const [ofertaSeleccionada,setOfertaSeleccionada] = useState<any>(null);
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState<string | null>(null);
   const [mostrarTodas,      setMostrarTodas]       = useState(false);
-  const [modoManual,        setModoManual]         = useState(false); // el vendedor cambió la selección
+  const [modoManual,        setModoManual]         = useState(false);
   const [confirmando,       setConfirmando]        = useState(false);
 
   const cargarOfertas = async () => {
@@ -43,7 +45,7 @@ export default function SimuladorFinanciero({
       const res = await fetch("/api/fondeo", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operacionId: operacionId || "preview", entidadId, monto, cuotas, scoreCliente }),
+        body: JSON.stringify({ operacionId: operacionId || "preview", entidadId, monto, cuotas, scoreCliente, producto }),
       });
       const data = await res.json();
 
@@ -53,20 +55,18 @@ export default function SimuladorFinanciero({
 
       // Si no hay fondeadores externos, agregar opción capital propio
       if (lista.length === 0) {
-        // Cálculo local con capital propio
-        const TEM        = (80 / 100) / 12; // TNA 80% por defecto
+        const TEM        = (80 / 100) / 12;
         const cuotaPura  = TEM > 0
           ? (monto * TEM * Math.pow(1 + TEM, cuotas)) / (Math.pow(1 + TEM, cuotas) - 1)
           : monto / cuotas;
-        const total      = cuotaPura * cuotas;
-        const cft        = ((total / monto) - 1) * (12 / cuotas) * 100;
+        const totalDev   = cuotaPura * cuotas;
         lista.push({
           fondeadorId:    "propio",
           nombre:         "Capital Propio",
           tna:            80,
           cuotaFinal:     Math.round(cuotaPura),
-          totalDevolver:  Math.round(total),
-          cft:            parseFloat(cft.toFixed(2)),
+          totalDevolver:  Math.round(totalDev),
+          cft:            parseFloat((((totalDev / monto) - 1) * (12 / cuotas) * 100).toFixed(2)),
           comision:       0,
           cupoDisponible: 999999999,
           esOptima:       true,
@@ -74,158 +74,122 @@ export default function SimuladorFinanciero({
       }
 
       setOfertas(lista);
-      // Auto-seleccionar la óptima (primera de la lista ordenada)
-      const optima = lista.find((o: any) => o.esOptima) || lista[0];
+      const optima = lista.find(o => o.esOptima) || lista[0];
       setOfertaSeleccionada(optima);
       setModoManual(false);
 
     } catch (e: any) {
-      setError(e.message);
+      setError("Error de conexión al cargar ofertas.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { cargarOfertas(); }, [monto, cuotas, scoreCliente, entidadId]);
+  useEffect(() => { cargarOfertas(); }, [monto, cuotas, entidadId, producto]);
 
-  const seleccionarOferta = (oferta: any) => {
+  const seleccionar = (oferta: any) => {
     setOfertaSeleccionada(oferta);
-    setModoManual(!oferta.esOptima);
+    setModoManual(true);
   };
 
   const confirmar = async () => {
     if (!ofertaSeleccionada) return;
     setConfirmando(true);
-    try { onConfirm(ofertaSeleccionada); }
-    finally { setConfirmando(false); }
+    try {
+      // Si ya hay operación y no es capital propio, asignar fondeador
+      if (operacionId && ofertaSeleccionada.fondeadorId !== "propio") {
+        await fetch("/api/fondeo", {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operacionId,
+            fondeadorId: ofertaSeleccionada.fondeadorId,
+            oferta: ofertaSeleccionada,
+            entidadId,
+          }),
+        });
+      }
+      onConfirm(ofertaSeleccionada);
+    } finally {
+      setConfirmando(false);
+    }
   };
 
-  const ofertasVisibles = mostrarTodas ? ofertas : ofertas.slice(0, 3);
-
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-500">
-      <Loader2 size={24} className="animate-spin"/>
-      <p className="text-sm font-bold">Calculando mejores ofertas...</p>
+    <div className="flex items-center justify-center py-8 gap-2 text-gray-500 text-sm">
+      <Loader2 size={16} className="animate-spin" /> Consultando fondeadores...
     </div>
   );
 
-  // ── Error ──────────────────────────────────────────────────────────────────
   if (error) return (
-    <div className="flex items-center gap-3 p-4 rounded-xl bg-red-900/10 border border-red-900/40 text-red-400">
-      <AlertTriangle size={16}/>
-      <p className="text-sm">{error}</p>
-      <button onClick={cargarOfertas} className="ml-auto text-xs font-bold flex items-center gap-1 hover:text-white">
-        <RefreshCw size={12}/> Reintentar
+    <div className="flex items-center gap-2 text-red-400 text-sm p-4 bg-red-900/10 border border-red-900/30 rounded-xl">
+      <AlertTriangle size={14} />
+      <span>{error}</span>
+      <button onClick={cargarOfertas} className="ml-auto text-xs text-gray-400 hover:text-white flex items-center gap-1">
+        <RefreshCw size={12} /> Reintentar
       </button>
     </div>
   );
 
-  // ── Sin ofertas ────────────────────────────────────────────────────────────
   if (ofertas.length === 0) return (
-    <div className="text-center py-8 text-gray-600 text-sm">
-      No hay fondeadores disponibles para este monto/score.
+    <div className="text-center py-6 text-gray-500 text-sm">
+      No hay fondeadores disponibles {producto ? `para ${producto}` : ''} con estas condiciones.
     </div>
   );
 
-  return (
-    <div className="space-y-4 animate-in fade-in duration-300">
+  const visibles = mostrarTodas ? ofertas : ofertas.slice(0, 3);
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-gray-400">
-          <Info size={14}/>
-          <span>{ofertas.length} {ofertas.length === 1 ? "opción disponible" : "opciones disponibles"}</span>
+  return (
+    <div className="space-y-3">
+      {/* Info */}
+      {modoManual && (
+        <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-900/10 border border-blue-900/30 rounded-xl p-3">
+          <Info size={12} />
+          Selección manual — la oferta óptima era <strong>{ofertas.find(o => o.esOptima)?.nombre}</strong>
         </div>
-        {modoManual && (
-          <div className="flex items-center gap-1.5 text-xs text-yellow-400">
-            <AlertTriangle size={11}/> Selección manual
-            <button onClick={() => { setOfertaSeleccionada(ofertas.find(o => o.esOptima) || ofertas[0]); setModoManual(false); }}
-              className="ml-1 text-gray-500 hover:text-white underline">
-              volver al óptimo
-            </button>
-          </div>
-        )}
-        <button onClick={cargarOfertas} title="Actualizar"
-          className="text-gray-600 hover:text-white transition-colors">
-          <RefreshCw size={13}/>
-        </button>
-      </div>
+      )}
 
       {/* Lista de ofertas */}
-      <div className="space-y-2">
-        {ofertasVisibles.map((oferta: any) => {
-          const seleccionada = ofertaSeleccionada?.fondeadorId === oferta.fondeadorId;
-          return (
-            <div key={oferta.fondeadorId}
-              onClick={() => seleccionarOferta(oferta)}
-              className={`relative cursor-pointer rounded-2xl border-2 p-4 transition-all ${
-                seleccionada
-                  ? "border-transparent shadow-[0_0_0_2px] bg-white/5"
-                  : "border-gray-800 hover:border-gray-600 bg-[#0A0A0A]"
-              }`}
-              style={seleccionada ? { boxShadow: `0 0 0 2px ${colorPrimario}` } : {}}>
-
-              {/* Badge óptimo */}
-              {oferta.esOptima && (
-                <div className="absolute -top-2.5 left-4 flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full text-white"
-                  style={{ backgroundColor: colorPrimario }}>
-                  <Zap size={9}/> MEJOR OFERTA
-                </div>
-              )}
-
-              <div className="flex items-center gap-4">
-                {/* Ícono fondeador */}
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${seleccionada ? "text-white" : "bg-gray-800 text-gray-500"}`}
-                  style={seleccionada ? { backgroundColor: colorPrimario } : {}}>
-                  <Landmark size={16}/>
-                </div>
-
-                {/* Info fondeador */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-black text-white text-sm">{oferta.nombre}</p>
-                  <p className="text-[10px] text-gray-500">
-                    TNA {oferta.tna}% · CFT {oferta.cft}% · Cupo disp. {fmtM(oferta.cupoDisponible)}
-                  </p>
-                </div>
-
-                {/* Cuota */}
-                <div className="text-right shrink-0">
-                  <p className="text-xl font-black text-white">{fmt(oferta.cuotaFinal)}</p>
-                  <p className="text-[10px] text-gray-500">/ cuota</p>
-                </div>
-
-                {/* Check */}
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${seleccionada ? "border-transparent" : "border-gray-700"}`}
-                  style={seleccionada ? { backgroundColor: colorPrimario } : {}}>
-                  {seleccionada && <Check size={11} className="text-white"/>}
-                </div>
+      {visibles.map((o, i) => (
+        <button key={o.fondeadorId}
+          onClick={() => seleccionar(o)}
+          className={`w-full text-left p-4 rounded-2xl border transition-all ${
+            ofertaSeleccionada?.fondeadorId === o.fondeadorId
+              ? "border-white/30 bg-white/[0.03]"
+              : "border-gray-800 hover:border-gray-700 bg-[#0A0A0A]"
+          }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${
+                o.esOptima ? "text-green-400 bg-green-900/30" : "text-gray-500 bg-gray-800"
+              }`}>
+                {o.esOptima ? <Zap size={14} /> : i + 1}
               </div>
-
-              {/* Detalle expandido cuando está seleccionada */}
-              {seleccionada && (
-                <div className="mt-3 pt-3 border-t border-gray-800 grid grid-cols-3 gap-2 animate-in fade-in duration-200">
-                  {[
-                    { label: "Total a devolver", valor: fmt(oferta.totalDevolver) },
-                    { label: "Comisión Simply",  valor: fmt(oferta.comision)      },
-                    { label: "Cuotas",           valor: `${cuotas} meses`         },
-                  ].map((d, i) => (
-                    <div key={i} className="text-center">
-                      <p className="text-xs font-black text-white">{d.valor}</p>
-                      <p className="text-[10px] text-gray-600 mt-0.5">{d.label}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div>
+                <p className="font-bold text-white text-sm flex items-center gap-2">
+                  {o.nombre}
+                  {o.esOptima && <span className="text-[9px] text-green-400 uppercase tracking-widest font-black">Óptima</span>}
+                </p>
+                <p className="text-xs text-gray-500">
+                  TNA {o.tna}% · CFT {o.cft}% · Cupo {fmtM(o.cupoDisponible)}
+                </p>
+              </div>
             </div>
-          );
-        })}
-      </div>
+            <div className="text-right">
+              <p className="font-black text-white font-mono">{fmt(o.cuotaFinal)}</p>
+              <p className="text-[10px] text-gray-600">Total {fmt(o.totalDevolver)}</p>
+            </div>
+          </div>
+          {o.comision > 0 && (
+            <p className="text-[10px] text-gray-600 mt-1 ml-11">Comisión: {fmt(o.comision)}</p>
+          )}
+        </button>
+      ))}
 
-      {/* Ver más / menos */}
+      {/* Ver más */}
       {ofertas.length > 3 && (
         <button onClick={() => setMostrarTodas(!mostrarTodas)}
-          className="w-full py-2 text-xs text-gray-500 hover:text-white font-bold flex items-center justify-center gap-1 transition-colors">
+          className="w-full text-center text-xs text-gray-500 hover:text-white py-2 flex items-center justify-center gap-1">
           {mostrarTodas
             ? <><ChevronUp size={12}/> Ver menos</>
             : <><ChevronDown size={12}/> Ver {ofertas.length - 3} más</>}

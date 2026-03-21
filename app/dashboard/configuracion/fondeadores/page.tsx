@@ -49,6 +49,7 @@ export default function ConfigFondeadoresPage() {
     cupoMaximo: 50000000,
     comisionTipo: "PORCENTUAL", comisionValor: 2,
     emailNotificacion: "",
+    productos: ["CUAD", "PRIVADO", "ADELANTO"],
   });
 
   const puedeEditar = ["GERENTE_GENERAL","MASTER_PAYSUR"].includes(userData?.rol || "");
@@ -146,6 +147,7 @@ export default function ConfigFondeadoresPage() {
         comision:      f.comision,
         activo:        f.activo,
         emailNotificacion: f.emailNotificacion,
+        productos: f.productos || [],
       });
       setOk(f.id + "_params"); setTimeout(() => setOk(null), 2500);
     } finally { setGuardando(false); }
@@ -293,6 +295,30 @@ export default function ConfigFondeadoresPage() {
                     {ok === f.id + "_params" ? "Guardado" : "Guardar parámetros"}
                   </button>
                 )}
+              </div>
+
+              {/* Productos habilitados */}
+              <div className="mt-4">
+                <p className="text-[10px] text-gray-500 uppercase font-bold mb-2">Productos habilitados</p>
+                <div className="flex gap-2">
+                  {["CUAD", "PRIVADO", "ADELANTO"].map(prod => {
+                    const activo = (f.productos || []).includes(prod);
+                    return (
+                      <button key={prod} type="button"
+                        onClick={() => {
+                          const prods = f.productos || [];
+                          const next = activo ? prods.filter((p: string) => p !== prod) : [...prods, prod];
+                          setFondProp(f.id, "productos", next);
+                        }}
+                        disabled={!puedeEditar}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          activo ? "border-green-700 bg-green-900/30 text-green-400" : "border-gray-700 text-gray-500 hover:text-white"
+                        } disabled:opacity-50`}>
+                        {prod}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Permisos del portal */}
