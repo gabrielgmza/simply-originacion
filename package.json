@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
+    "@sentry/nextjs": "^10.45.0",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
     "file-saver": "^2.0.5",

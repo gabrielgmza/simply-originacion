@@ -42,3 +42,6 @@ next-env.d.ts
 
 /lib/generated/prisma
 .env*.local
+
+# Sentry Config File
+.env.sentry-build-plugin
