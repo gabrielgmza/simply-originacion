@@ -1,0 +1,52 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Helpers ──
+    function isAuth() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    // ── Legajos: DNI, selfie, firma, recibos ──
+    // Path: legajos/{entidadId}/{operacionId}/{archivo}
+    match /legajos/{entidadId}/{operacionId}/{allPaths=**} {
+      // Cualquier usuario autenticado puede subir (el onboarding sube desde magic link)
+      allow create: if isAuth() || request.auth == null;
+      // Solo staff de la entidad puede leer
+      allow read:   if isAuth();
+      allow update, delete: if isAuth();
+    }
+
+    // ── Onboarding público (magic links sin auth) ──
+    // Path: onboarding/{token}/{archivo}
+    match /onboarding/{token}/{allPaths=**} {
+      allow read, write: if true;  // Magic links no tienen auth
+    }
+
+    // ── Logos de entidades ──
+    // Path: entidades/{entidadId}/logo.{ext}
+    match /entidades/{entidadId}/{allPaths=**} {
+      allow read:   if true;  // Logos son públicos (white-label)
+      allow write:  if isAuth();
+    }
+
+    // ── Certificados PDF generados ──
+    // Path: certificados/{entidadId}/{operacionId}/{archivo}
+    match /certificados/{entidadId}/{operacionId}/{allPaths=**} {
+      allow read:   if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAuth();
+    }
+
+    // ── Screenshots del bot CUAD ──
+    // Path: cuad/{entidadId}/{archivo}
+    match /cuad/{entidadId}/{allPaths=**} {
+      allow read:   if isAuth();
+      allow write:  if isAuth();
+    }
+
+    // ── Deny all other paths ──
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

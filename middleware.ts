@@ -22,12 +22,24 @@ const RUTAS_PROTEGIDAS: Record<string, string[] | null> = {
   "/dashboard":                           null,
 };
 
+// APIs que NO requieren sesión (webhooks, auth, públicas)
+const API_PUBLICAS = [
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/webhooks/",       // webhooks de Pagos360
+  "/api/leads",           // el simulador público crea leads
+  "/api/simular/",        // landing pública
+  "/api/portal/",         // portal del cliente (usa DNI, no sesión)
+  "/api/onboarding/",     // magic links públicos
+  "/api/cron/",           // Vercel cron (protegido por CRON_SECRET interno)
+];
+
 const RUTAS_PUBLICAS = [
   "/login",
   "/onboarding",
   "/firma",
   "/portal",
-  "/api/",
+  "/simular",
   "/_next",
   "/favicon",
 ];
@@ -35,10 +47,31 @@ const RUTAS_PUBLICAS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Assets y rutas públicas de páginas
   if (RUTAS_PUBLICAS.some(p => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
+  // APIs públicas específicas
+  if (pathname.startsWith("/api/")) {
+    const esPublica = API_PUBLICAS.some(p => pathname.startsWith(p));
+    if (esPublica) return NextResponse.next();
+
+    // APIs privadas requieren sesión
+    const session = getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    // Inyectar headers para que las API routes conozcan al usuario
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-user-uid",     session.uid);
+    requestHeaders.set("x-user-rol",     session.rol);
+    requestHeaders.set("x-user-entidad", session.entidadId);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  // Páginas protegidas
   const session = getSession(request);
 
   if (!session) {
