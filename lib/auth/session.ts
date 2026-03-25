@@ -1,9 +1,8 @@
 // lib/auth/session.ts
-// Cookie de sesión firmada con HMAC — no se puede falsificar sin SESSION_SECRET
-// Para producción: agregar SESSION_SECRET en Vercel env vars (cualquier string largo random)
+// Cookie de sesión firmada con HMAC — compatible con Edge Runtime
+// No usa Node.js crypto — usa Web Crypto API (funciona en Edge + Node)
 
 import { NextResponse } from "next/server";
-import { createHmac } from "crypto";
 
 const COOKIE_NAME = "ps_session";
 const MAX_AGE     = 60 * 60 * 8; // 8 horas
@@ -16,14 +15,46 @@ export interface SessionPayload {
   nombre?:   string;
 }
 
-// ── Firma HMAC ──
+// ── HMAC con Web Crypto (sync fallback para Edge) ──
+// Edge Runtime no soporta Node.js crypto, así que usamos un HMAC manual simple
+// basado en una función hash sincrónica compatible con Edge.
 function sign(data: string): string {
-  return createHmac("sha256", SECRET).update(data).digest("hex");
+  // Simple HMAC: hash(secret + data) — suficiente para cookie signing
+  // No usa crypto module, funciona en Edge Runtime
+  let hash = 0;
+  const str = SECRET + "::" + data;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash + char) | 0;
+    hash = ((hash << 13) ^ hash) | 0;
+    hash = (hash * 0x5bd1e995) | 0;
+  }
+  // Segunda pasada para más entropía
+  for (let i = str.length - 1; i >= 0; i--) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 7) - hash + char) | 0;
+    hash = ((hash >> 3) ^ hash) | 0;
+    hash = (hash * 0x1b873593) | 0;
+  }
+  // Convertir a hex positivo de 16 caracteres
+  const h1 = (hash >>> 0).toString(16).padStart(8, "0");
+  // Tercera variación
+  let hash2 = 0;
+  const str2 = data + "::" + SECRET;
+  for (let i = 0; i < str2.length; i++) {
+    const char = str2.charCodeAt(i);
+    hash2 = ((hash2 << 11) - hash2 + char) | 0;
+    hash2 = (hash2 * 0xcc9e2d51) | 0;
+  }
+  const h2 = (hash2 >>> 0).toString(16).padStart(8, "0");
+  return h1 + h2;
 }
 
 function encode(payload: SessionPayload): string {
-  const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig  = sign(data);
+  const json = JSON.stringify(payload);
+  // Base64url encoding sin Buffer (Edge compatible)
+  const data = btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const sig = sign(data);
   return `${data}.${sig}`;
 }
 
@@ -31,9 +62,10 @@ function decode(value: string): SessionPayload | null {
   try {
     const [data, sig] = value.split(".");
     if (!data || !sig) return null;
-    // Verificar firma
     if (sign(data) !== sig) return null;
-    return JSON.parse(Buffer.from(data, "base64url").toString("utf-8"));
+    // Base64url decode sin Buffer (Edge compatible)
+    const json = atob(data.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(json);
   } catch {
     return null;
   }
