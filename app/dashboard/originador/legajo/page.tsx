@@ -15,12 +15,27 @@ function calcularCuil(dni: string, sexo: string): string {
   const dniStr = dni.padStart(8, "0");
   let prefijo = sexo === "F" ? "27" : "20";
   const mult = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  let suma = 0;
+
+  // Paso 1: calcular con prefijo inicial (20 o 27)
   const base = prefijo + dniStr;
+  let suma = 0;
   for (let i = 0; i < 10; i++) suma += parseInt(base[i]) * mult[i];
-  let digito = 11 - (suma % 11);
-  if (digito === 11) digito = 0;
-  if (digito === 10) { prefijo = "23"; digito = sexo === "F" ? 4 : 9; }
+  const resto = suma % 11;
+
+  let digito: number;
+
+  if (resto === 0) {
+    // Caso A: dígito es 0
+    digito = 0;
+  } else if (resto === 1) {
+    // Caso B: prefijo cambia a 23, dígito fijo según sexo
+    prefijo = "23";
+    digito = sexo === "F" ? 4 : 9;
+  } else {
+    // Caso C: 11 - resto
+    digito = 11 - resto;
+  }
+
   return prefijo + dniStr + digito.toString();
 }
 
