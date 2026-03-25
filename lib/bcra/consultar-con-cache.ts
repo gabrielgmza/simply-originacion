@@ -22,7 +22,7 @@ export async function consultarBcraConCache(
   ttlHoras?: number
 ): Promise<BcraResult> {
   const ttl = ttlHoras ?? CACHE_TTL_HORAS_DEFAULT;
-  const cacheKey = `bcra_${documento}`;
+  const cacheKey = `bcra_${documento}_${sexo}`;
   const cacheRef = doc(db, "cache_bcra", cacheKey);
 
   // 1. Buscar en caché
