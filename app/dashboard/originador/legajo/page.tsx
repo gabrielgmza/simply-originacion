@@ -254,8 +254,8 @@ export default function NuevoLegajoPage() {
 
     const tieneNombreM = bcraM?.nombre && bcraM.nombre.trim().length > 0;
     const tieneNombreF = bcraF?.nombre && bcraF.nombre.trim().length > 0;
-    const tieneDatosM  = bcraM && (tieneNombreM || bcraM.cuil);
-    const tieneDatosF  = bcraF && (tieneNombreF || bcraF.cuil);
+    const tieneDatosM  = bcraM && tieneNombreM;
+    const tieneDatosF  = bcraF && tieneNombreF;
 
     let bcraFinal: any = null;
     let sexoDetectado = "M";
