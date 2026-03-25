@@ -1,4 +1,5 @@
 "use client";
+const BOT_URL = "https://simply-bot-mendoza-278599265960.us-central1.run.app";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { collection, query, where, getDocs } from "firebase/firestore";
