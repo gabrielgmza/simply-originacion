@@ -210,64 +210,144 @@ export default function NuevoLegajoPage() {
   const [opcionesBcra, setOpcionesBcra] = useState<any[]>([]);
   const [stCuad,    setStCuad]    = useState<"idle"|"procesando"|"ok"|"error"|"no_empleado">("idle");
 
+  // ── EVALUAR: consulta BCRA con ambos sexos, detecta automáticamente ──
   const evaluar = async () => {
     if (dni.length < 7) return;
     setPaso("analizando");
     setStBcra("procesando"); setStJuicios("procesando"); setStCliente("procesando");
-    const cuilCalc = calcularCuil(dni, sexo);
-    setCuil(cuilCalc);
+    setSinInfoBcra(false); setOpcionesBcra([]);
 
-    const [resBcra, resJuicios, resCliente] = await Promise.allSettled([
-      fetch("/api/bcra", {
+    // 1. Consultar BCRA con ambos sexos en paralelo
+    const [resM, resF, resJuicios] = await Promise.allSettled([
+      fetch("/api/bcra/consultar", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documento: dni, sexo }),
+        body: JSON.stringify({ documento: dni, sexo: "M" }),
+      }).then(r => r.json()),
+      fetch("/api/bcra/consultar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documento: dni, sexo: "F" }),
       }).then(r => r.json()),
       fetch(`${BOT_URL}/api/consultar-juicios`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dni }),
       }).then(r => r.json()),
-      Promise.resolve(null), // historial interno (futuro)
     ]);
 
-    let sit = 1;
-    let dniValido = false;
-    if (resBcra.status === "fulfilled" && resBcra.value?.success) {
-      const b = resBcra.value.bcra;
-      // Verificar si hay dos personas distintas (ambos CUILs encontraron nombre diferente)
-      if (b.opciones && b.opciones.length > 1) {
-        setOpcionesBcra(b.opciones);
-        setPaso("elegir_persona" as any);
+    // 2. Analizar resultados BCRA
+    const bcraM = resM.status === "fulfilled" && resM.value?.success ? resM.value.bcra : null;
+    const bcraF = resF.status === "fulfilled" && resF.value?.success ? resF.value.bcra : null;
+
+    const tieneNombreM = bcraM?.nombre && bcraM.nombre.trim().length > 0;
+    const tieneNombreF = bcraF?.nombre && bcraF.nombre.trim().length > 0;
+    const tieneDatosM  = bcraM && (tieneNombreM || bcraM.cuil);
+    const tieneDatosF  = bcraF && (tieneNombreF || bcraF.cuil);
+
+    let bcraFinal: any = null;
+    let sexoDetectado = "M";
+
+    if (tieneDatosM && tieneDatosF && tieneNombreM && tieneNombreF) {
+      // Ambos devolvieron datos con nombre — ¿son la misma persona?
+      if (bcraM.nombre?.trim().toUpperCase() === bcraF.nombre?.trim().toUpperCase()) {
+        // Misma persona, usar masculino por defecto
+        bcraFinal = bcraM;
+        sexoDetectado = "M";
+      } else {
+        // Dos personas diferentes — dejar que el vendedor elija
+        setOpcionesBcra([
+          { ...bcraM, cuil: bcraM.cuil || calcularCuil(dni, "M"), sexo: "M" },
+          { ...bcraF, cuil: bcraF.cuil || calcularCuil(dni, "F"), sexo: "F" },
+        ]);
+        // Juicios igual los procesamos
+        procesarJuicios(resJuicios);
+        setPaso("elegir_persona");
+        setStBcra("ok");
+        setStCliente("ok");
         return;
       }
-      setBcra(b);
-      sit = parseInt(b?.peorSituacion || "1");
-      if (b?.nombre) { setNombreCliente(b.nombre); dniValido = true; }
-      else setSinInfoBcra(true);
+    } else if (tieneDatosM) {
+      bcraFinal = bcraM;
+      sexoDetectado = "M";
+    } else if (tieneDatosF) {
+      bcraFinal = bcraF;
+      sexoDetectado = "F";
+    } else {
+      // Ninguno devolvió datos — SIN INFO
+      setSinInfoBcra(true);
       setStBcra("ok");
-    } else setStBcra("error");
-    setSituacion(sit);
+    }
 
-    let tieneJuicios = false;
+    if (bcraFinal) {
+      setBcra(bcraFinal);
+      setSexo(sexoDetectado);
+      const cuilCalc = bcraFinal.cuil || calcularCuil(dni, sexoDetectado);
+      setCuil(cuilCalc);
+      if (bcraFinal.nombre) setNombreCliente(bcraFinal.nombre);
+      const sit = parseInt(bcraFinal.peorSituacion || "1");
+      setSituacion(sit);
+      setStBcra("ok");
+    } else {
+      // Sin datos — calcular CUIL genérico
+      setCuil(calcularCuil(dni, "M"));
+      setSituacion(1);
+      setStBcra("ok");
+    }
+
+    // 3. Juicios
+    procesarJuicios(resJuicios);
+
+    // 4. Historial interno
+    setStCliente("ok");
+
+    // 5. Scoring
+    calcularScoringLocal(bcraFinal, resJuicios);
+    setPaso("resultado");
+  };
+
+  // Helper: procesar resultado de juicios
+  const procesarJuicios = (resJuicios: PromiseSettledResult<any>) => {
     if (resJuicios.status === "fulfilled" && resJuicios.value?.success) {
       setJuicios(resJuicios.value.judicial);
-      tieneJuicios = (resJuicios.value.judicial?.registros?.length || 0) > 0;
       if (!nombreCliente && resJuicios.value.judicial?.registros?.[0]?.nombre)
         setNombreCliente(resJuicios.value.judicial.registros[0].nombre);
       setStJuicios("ok");
-    } else setStJuicios("error");
-
-    if (resCliente.status === "fulfilled" && resCliente.value?.existe) {
-      setYaCliente(true);
-      if (!nombreCliente && resCliente.value?.nombre) setNombreCliente(resCliente.value.nombre);
+    } else {
+      setStJuicios("error");
     }
-    setStCliente("ok");
+  };
+
+  // Helper: calcular scoring local
+  const calcularScoringLocal = (bcraData: any, resJuicios: PromiseSettledResult<any>) => {
+    const sit = bcraData ? parseInt(bcraData.peorSituacion || "1") : 1;
+    const tieneJuicios = resJuicios.status === "fulfilled" &&
+      (resJuicios.value?.judicial?.registros?.length || 0) > 0;
+    const dniValido = !!bcraData?.nombre;
 
     const maxSit = entidadData?.scoring?.bcraMaxSituacion ?? 2;
     let resultado: ResultadoScoring = "APROBADO";
-    if (!dniValido) resultado = "OBSERVADO"; // DNI no encontrado en BCRA
+    if (!dniValido) resultado = "OBSERVADO";
     if (sit > maxSit) resultado = entidadData?.scoring?.accionBcraExcedido === "RECHAZADO" ? "RECHAZADO" : "OBSERVADO";
     if (tieneJuicios && resultado !== "RECHAZADO") resultado = "OBSERVADO";
     setScoring(resultado);
+  };
+
+  // Cuando el vendedor elige una persona de las opciones
+  const elegirPersona = (opcion: any) => {
+    setBcra(opcion);
+    setNombreCliente(opcion.nombre);
+    setCuil(opcion.cuil);
+    setSexo(opcion.sexo || (opcion.cuil?.startsWith("27") ? "F" : "M"));
+    const sit = parseInt(opcion.peorSituacion || "1");
+    setSituacion(sit);
+
+    // Recalcular scoring con la persona elegida
+    const maxSit = entidadData?.scoring?.bcraMaxSituacion ?? 2;
+    const tieneJuicios = (juicios?.registros?.length || 0) > 0;
+    let resultado: ResultadoScoring = "APROBADO";
+    if (sit > maxSit) resultado = entidadData?.scoring?.accionBcraExcedido === "RECHAZADO" ? "RECHAZADO" : "OBSERVADO";
+    if (tieneJuicios && resultado !== "RECHAZADO") resultado = "OBSERVADO";
+    setScoring(resultado);
+
+    setStBcra("ok");
     setPaso("resultado");
   };
 
@@ -275,8 +355,7 @@ export default function NuevoLegajoPage() {
     if (!monto || !producto) return;
     setGuardando(true);
     try {
-
-  const montoNum  = parseInt(monto) || 0;
+      const montoNum  = parseInt(monto) || 0;
       const cuotasNum = parseInt(cuotas) || 12;
       const TEM = ((entidadData?.configuracion?.tasaInteresBase || 80) / 100) / 12;
       const cuota = Math.round((montoNum * TEM * Math.pow(1 + TEM, cuotasNum)) / (Math.pow(1 + TEM, cuotasNum) - 1));
@@ -339,6 +418,7 @@ export default function NuevoLegajoPage() {
     setProducto(null); setMonto(""); setArchivos({ dniFrente: false, dniDorso: false, recibo: false });
     setStBcra("idle"); setStJuicios("idle"); setStCliente("idle"); setYaCliente(false);
     setStCuad("idle"); setCuadData(null); setSinInfoBcra(false); setOpcionesBcra([]);
+    setSexo("M"); setCuil("");
   };
 
   return (
@@ -354,27 +434,24 @@ export default function NuevoLegajoPage() {
           {paso === "producto"  && "Seleccioná el tipo de crédito"}
           {paso === "formulario"&& "Configurá el crédito"}
           {paso === "ok"        && "Operación guardada exitosamente"}
+          {paso === "elegir_persona" && "Seleccioná la persona correcta"}
         </p>
       </div>
 
       {/* ELEGIR PERSONA */}
-      {paso === ("elegir_persona" as any) && (
+      {paso === "elegir_persona" && (
         <div className="space-y-4">
           <div className="bg-yellow-900/10 border border-yellow-900/40 rounded-2xl p-4">
             <p className="text-yellow-400 font-bold text-sm">Se encontraron dos personas con ese DNI</p>
             <p className="text-xs text-gray-500 mt-1">Seleccioná con cuál querés continuar</p>
           </div>
-          {opcionesBcra.map((op: any) => (
-            <button key={op.cuil} onClick={() => {
-              setBcra(op); setNombreCliente(op.nombre); setCuil(op.cuil);
-              setSexo(op.cuil.startsWith("27") ? "F" : "M");
-              setPaso("analizando");
-              // Continuar con juicios usando el cuil elegido
-            }}
+          {opcionesBcra.map((op: any, idx: number) => (
+            <button key={op.cuil || idx} onClick={() => elegirPersona(op)}
               className="w-full bg-[#0A0A0A] border border-gray-900 hover:border-orange-500 rounded-2xl p-5 text-left transition-all">
               <p className="font-black text-white">{op.nombre}</p>
-              <p className="text-xs text-gray-500 font-mono mt-1">CUIL {op.cuil} · {op.cuil.startsWith("27") ? "Femenino" : "Masculino"}</p>
+              <p className="text-xs text-gray-500 font-mono mt-1">CUIL {op.cuil} · {op.sexo === "F" || op.cuil?.startsWith("27") ? "Femenino" : "Masculino"}</p>
               {op.tieneDeudas && <p className="text-xs text-red-400 mt-1">Situación {op.peorSituacion} · Con deudas</p>}
+              {!op.tieneDeudas && <p className="text-xs text-green-400 mt-1">Situación {op.peorSituacion || 1} · Sin deudas</p>}
             </button>
           ))}
           <button onClick={resetear}
