@@ -81,6 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { nombre: "Marca",              ruta: "/dashboard/configuracion/marca",         icono: <Palette size={16}/>,      visible: puedeConfigurar },
         { nombre: "WhatsApp",           ruta: "/dashboard/configuracion/whatsapp",      icono: <MessageSquare size={16}/>, visible: puedeConfigurar },
         { nombre: "Credenciales CUAD",  ruta: "/dashboard/credenciales",                icono: <Key size={16}/>,           visible: puedeConfigurar && !!modulos.cuad },
+        { nombre: "Productos",          ruta: "/dashboard/configuracion/productos",    icono: <Layers size={16}/>,        visible: puedeConfigurar },
         { nombre: "Scoring Crediticio", ruta: "/dashboard/configuracion/scoring",       icono: <Shield size={16}/>,        visible: puedeConfigurar },
         { nombre: "Politica de Mora",   ruta: "/dashboard/configuracion/mora",          icono: <BadgeCheck size={16}/>,    visible: puedeConfigurar },
         { nombre: "Campos Onboarding",  ruta: "/dashboard/configuracion/onboarding",    icono: <FileSignature size={16}/>, visible: puedeConfigurar },
