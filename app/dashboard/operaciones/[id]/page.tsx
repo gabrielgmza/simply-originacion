@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import DescargarLegajoBtn from "@/components/DescargarLegajoBtn";
 import CertificadosWidget from "@/components/CertificadosWidget";
 import ScoringWidget from "@/components/ScoringWidget";
 import {
@@ -247,6 +248,8 @@ export default function DetalleOperacionPage() {
           </div>
 
           {/* Scoring */}
+          <DescargarLegajoBtn operacionId={id} />
+
           <ScoringWidget
             operacionId={id}
             scoringActual={op.scoring?.puntaje ? op.scoring : undefined}

@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import DescargarLegajoBtn from "@/components/DescargarLegajoBtn";
 import {
   ArrowLeft, CheckCircle2, Clock, AlertTriangle,
   Loader2, CreditCard, Plus, FileText, Eye, User, Shield
