@@ -31,6 +31,7 @@ const API_PUBLICAS = [
   "/api/simular/",        // landing pública
   "/api/portal/",         // portal del cliente (usa DNI, no sesión)
   "/api/onboarding/",     // magic links públicos
+  "/api/bcra/",           // consultas BCRA (con caché)
   "/api/cron/",           // Vercel cron (protegido por CRON_SECRET interno)
 ];
 
