@@ -40,6 +40,7 @@ const RUTAS_PUBLICAS = [
   "/firma",
   "/portal",
   "/simular",
+  "/monitoring",
   "/_next",
   "/favicon",
 ];
