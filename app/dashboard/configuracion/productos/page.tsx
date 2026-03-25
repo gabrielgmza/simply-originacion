@@ -21,6 +21,7 @@ interface ConfigProducto {
   porcMaxSueldo:       number;   // % (solo relevante para ADELANTO)
   autoAprobacion:      boolean;  // pasa directo a liquidar si scoring OK
   requiereOnboarding:  boolean;  // requiere DNI, selfie, firma
+  comisionVendedor:    number;   // % comisión del vendedor
 }
 
 const DEFAULT_CONFIG: Record<ProductoKey, ConfigProducto> = {
@@ -28,19 +29,19 @@ const DEFAULT_CONFIG: Record<ProductoKey, ConfigProducto> = {
     activo: true, montoMinimo: 10000, montoMaximo: 500000,
     plazosDisponibles: [6, 12, 18, 24], tnaPropia: 80,
     gastosOtorgamiento: 5, seguroVida: 1.5, porcMaxSueldo: 0,
-    autoAprobacion: false, requiereOnboarding: true,
+    autoAprobacion: false, requiereOnboarding: true, comisionVendedor: 1.5,
   },
   PRIVADO: {
     activo: true, montoMinimo: 10000, montoMaximo: 1000000,
     plazosDisponibles: [3, 6, 9, 12, 18, 24, 36], tnaPropia: 120,
     gastosOtorgamiento: 8, seguroVida: 2, porcMaxSueldo: 0,
-    autoAprobacion: false, requiereOnboarding: true,
+    autoAprobacion: false, requiereOnboarding: true, comisionVendedor: 2,
   },
   ADELANTO: {
     activo: true, montoMinimo: 5000, montoMaximo: 300000,
     plazosDisponibles: [1, 3], tnaPropia: 60,
     gastosOtorgamiento: 3, seguroVida: 0, porcMaxSueldo: 30,
-    autoAprobacion: true, requiereOnboarding: false,
+    autoAprobacion: true, requiereOnboarding: false, comisionVendedor: 1,
   },
 };
 
@@ -264,6 +265,12 @@ export default function ConfigProductosPage() {
                       <label className="block text-[10px] text-gray-500 uppercase font-bold mb-1">Gastos otorg. (%)</label>
                       <input type="number" step={0.1} value={cfg.gastosOtorgamiento} disabled={!puedeEditar}
                         onChange={e => setVal(prod.key, "gastosOtorgamiento", parseFloat(e.target.value) || 0)}
+                        className="w-full bg-[#111] border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none disabled:opacity-50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-500 uppercase font-bold mb-1">Comisión vendedor (%)</label>
+                      <input type="number" step={0.1} value={cfg.comisionVendedor} disabled={!puedeEditar}
+                        onChange={e => setVal(prod.key, "comisionVendedor", parseFloat(e.target.value) || 0)}
                         className="w-full bg-[#111] border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none disabled:opacity-50" />
                     </div>
                     <div>

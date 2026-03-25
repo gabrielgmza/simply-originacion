@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { dispararEmail } from "@/lib/email/motor";
+import { calcularComision, registrarComision } from "@/lib/comisiones/calcular";
 
 export async function POST(request: Request) {
   try {
@@ -20,7 +21,30 @@ export async function POST(request: Request) {
       fechaActualizacion: serverTimestamp(),
     });
 
-    // Email automatico al cliente (no bloquea la respuesta)
+    // Calcular y registrar comisión del vendedor
+    if (op.vendedorId && op.financiero?.montoSolicitado) {
+      try {
+        const comision = await calcularComision(
+          operacionId,
+          op.entidadId,
+          op.vendedorId,
+          op.tipo || "PRIVADO",
+          op.financiero.montoSolicitado
+        );
+        await registrarComision(
+          operacionId,
+          op.entidadId,
+          op.vendedorId,
+          comision,
+          op.financiero.montoSolicitado,
+          op.cliente?.nombre || "—"
+        );
+      } catch (e) {
+        console.error("[Comisión al liquidar]", e);
+      }
+    }
+
+    // Email automático al cliente (no bloquea la respuesta)
     if (op.cliente?.email) {
       dispararEmail(op.entidadId, "CREDITO_LIQUIDADO", op.cliente.email, {
         nombre:      op.cliente.nombre,

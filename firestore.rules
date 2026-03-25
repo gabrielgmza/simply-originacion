@@ -149,6 +149,15 @@ service cloud.firestore {
       allow delete: if esMaster();
     }
 
+    
+    // ── Comisiones vendedores ─────────────────────────────────────────────────
+    match /comisiones/{comId} {
+      allow read:   if esMaster() || esStaffEntidad(resource.data.entidadId);
+      allow create: if isAuth();
+      allow update: if esMaster() || esGerenteEntidad(resource.data.entidadId);
+      allow delete: if esMaster();
+    }
+
     // ── Cache BCRA ────────────────────────────────────────────────────────────
     match /cache_bcra/{docId} {
       allow read, write: if isAuth();

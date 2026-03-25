@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/firebase";
 import {
   LayoutDashboard, UserCheck, BadgeCheck, Banknote, ChevronDown,
-  Briefcase, PhoneCall, Users, FileSignature, Webhook, Palette,
+  Briefcase, PhoneCall, DollarSign, Users, FileSignature, Webhook, Palette,
   Menu, X, LogOut, Key, TrendingUp, MessageSquare, Bell,
   Calculator, Building2, CreditCard, RefreshCw, Settings,
   BarChart3, UserPlus, Shield, Mail, Layers
@@ -53,6 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       items: [
         { nombre: "Cartera Activa",  ruta: "/dashboard/cartera",      icono: <Briefcase size={16}/>,  visible: true },
         { nombre: "Cobranzas",       ruta: "/dashboard/cobranzas",    icono: <PhoneCall size={16}/>,  visible: puedeLiquidar },
+        { nombre: "Comisiones",      ruta: "/dashboard/comisiones",   icono: <DollarSign size={16}/>, visible: true },
         { nombre: "Renovaciones",    ruta: "/dashboard/renovaciones", icono: <RefreshCw size={16}/>,  visible: puedeVender && !!modulos.renovaciones },
         { nombre: "Leads",           ruta: "/dashboard/leads",        icono: <UserPlus size={16}/>,   visible: puedeVender },
       ]
