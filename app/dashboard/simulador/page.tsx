@@ -80,8 +80,8 @@ function calcularResultado(
   };
 }
 
-const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
-const fmtPct = (n: number) => n.toFixed(2) + "%";
+const fmt = (n: any) => "$" + Math.round(Number(n) || 0).toLocaleString("es-AR");
+const fmtPct = (n: any) => Number(n || 0).toFixed(2) + "%";
 
 // ─── COMPONENTE ───────────────────────────────────────────────────────────────
 export default function SimuladorPage() {
